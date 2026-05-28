@@ -1,9 +1,10 @@
 /*
  * Z 値編集ダイアログ
- *  - ZSingleEditDialog: 1 つの P 杭の Z (mm) を入力
- *  - ZBulkEditDialog: 一括変更 (SetAll / AddDelta / SubtractSReference / SameZGroup)
+ *  - openSingleZEdit : 単一 P 杭の Z (mm) を入力
+ *  - openAllPilesEdit: 全 P 杭への一括変更 (Set / AddDelta / SubtractS)
+ *  - openGroupPilesEdit: 同じ Z 値の P 杭群に対する変更 (Set / AddDelta)
  *
- * Promise ベースで結果を返す。
+ * Promise ベースで結果を返す。キャンセル時は null。
  */
 (function (global) {
     'use strict';
@@ -30,8 +31,7 @@
         return e;
     }
 
-    function showModal(contentEl, opts) {
-        opts = opts || {};
+    function showModal(contentEl) {
         return new Promise((resolve) => {
             const backdrop = el('div', { class: 'modal-backdrop' });
             const dlg = el('div', { class: 'modal-dialog' }, contentEl);
@@ -52,9 +52,7 @@
                 if (e.target === backdrop) close(null);
             });
 
-            // 子側に close を提供
             contentEl._close = close;
-            // 最初の入力にフォーカス
             requestAnimationFrame(() => {
                 const focusEl = contentEl.querySelector('input, select, button');
                 if (focusEl) focusEl.focus();
@@ -72,10 +70,10 @@
         return isFinite(v) ? v : null;
     }
 
-    /**
-     * 単一 P 杭の Z (mm) 編集ダイアログ
+    /* =====================================================
+     * 単一 P 杭の Z (mm) 編集
      * @returns {Promise<number|null>}
-     */
+     * ===================================================== */
     async function openSingleZEdit(pointName, currentZmm) {
         const txt = el('input', {
             type: 'text',
@@ -97,10 +95,7 @@
                     type: 'button', class: 'btn btn-primary',
                     onclick: () => {
                         const v = tryParse(txt.value);
-                        if (v === null) {
-                            alert(`無効な数値です: ${txt.value}`);
-                            return;
-                        }
+                        if (v === null) { alert(`無効な数値です: ${txt.value}`); return; }
                         root._close(v);
                     },
                 }, 'OK'),
@@ -119,68 +114,44 @@
         return await showModal(root);
     }
 
-    /**
-     * P 杭の Z 一括変更ダイアログ
+    /* =====================================================
+     * 全 P 杭への一括変更 (Set / AddDelta / SubtractS)
      * @param {number} pCount
      * @param {number|null} sZmm
-     * @param {Array<{zmm:number,count:number}>} pZGroups
-     * @returns {Promise<null | {mode:string, value:number, sourceZmm?:number}>}
-     */
-    async function openBulkZEdit(pCount, sZmm, pZGroups) {
-        const summary = el('div', { class: 'dlg-summary' },
-            `対象: 全 P 杭 (${pCount} 本)  /  Z レベル: ${pZGroups.length} 種類`);
-
-        const rdSet = el('input', { type: 'radio', name: 'zmode', value: 'setAll', checked: true });
-        const rdAdd = el('input', { type: 'radio', name: 'zmode', value: 'addDelta' });
+     * @returns {Promise<null | {mode:'setAll'|'addDelta'|'subtractS', value:number}>}
+     * ===================================================== */
+    async function openAllPilesEdit(pCount, sZmm) {
+        const rdSet = el('input', { type: 'radio', name: 'allmode', value: 'setAll', checked: true });
+        const rdAdd = el('input', { type: 'radio', name: 'allmode', value: 'addDelta' });
         const rdSubS = el('input', {
-            type: 'radio', name: 'zmode', value: 'subtractS',
+            type: 'radio', name: 'allmode', value: 'subtractS',
             disabled: sZmm == null,
-        });
-        const rdSameZ = el('input', {
-            type: 'radio', name: 'zmode', value: 'sameZ',
-            disabled: pZGroups.length === 0,
         });
 
         const subSLabel = sZmm != null
-            ? `S 点の Z (=${(sZmm).toString()} mm) を全 P から減算  (Z = Z − S_Z)`
+            ? `S 点の Z (=${sZmm} mm) を全 P から減算  (Z = Z − S_Z)`
             : 'S 点の Z を全 P から減算  (S 点なしのため無効)';
-
-        const cmbGroup = el('select', { class: 'dlg-input mono', disabled: true });
-        for (const g of pZGroups) {
-            const opt = el('option', { value: String(g.zmm) },
-                `Z = ${String(g.zmm).padStart(12)} mm  (${g.count} 本)`);
-            cmbGroup.appendChild(opt);
-        }
-        if (pZGroups.length > 0) cmbGroup.selectedIndex = 0;
 
         const lblValue = el('label', { class: 'dlg-label' }, '新しい Z 値 (mm):');
         const txtValue = el('input', { type: 'text', class: 'dlg-input mono', value: '0' });
 
         function updateEnable() {
             txtValue.disabled = rdSubS.checked;
-            cmbGroup.disabled = !rdSameZ.checked;
             lblValue.textContent = rdAdd.checked ? '加算する値 Δ (mm):' : '新しい Z 値 (mm):';
         }
-        [rdSet, rdAdd, rdSubS, rdSameZ].forEach(r => r.addEventListener('change', updateEnable));
+        [rdSet, rdAdd, rdSubS].forEach(r => r.addEventListener('change', updateEnable));
 
-        const root = el('div', { class: 'dlg-body wide' },
-            el('h3', { class: 'dlg-title' }, 'P 杭の Z 一括変更'),
-            summary,
-            el('div', { class: 'dlg-section' }, '操作モード:'),
+        const root = el('div', { class: 'dlg-body' },
+            el('h3', { class: 'dlg-title' }, 'P 杭の Z — 全本変更'),
+            el('div', { class: 'dlg-summary' },
+                `対象: 全 P 杭 (${pCount} 本)`),
+            el('div', { class: 'dlg-section' }, '操作モード'),
             el('label', { class: 'dlg-radio' }, rdSet, ' 全 P の Z を一律に設定する  (Z = 値)'),
             el('label', { class: 'dlg-radio' }, rdAdd, ' 全 P の Z に加算する  (Z = Z + Δ)'),
             el('label', { class: 'dlg-radio' }, rdSubS, ' ' + subSLabel),
-            el('label', { class: 'dlg-radio' }, rdSameZ, ' 同じ Z 値のグループだけ変更する'),
-            el('div', { class: 'dlg-group' },
-                el('span', { class: 'dlg-sublabel' }, '対象 Z:'),
-                cmbGroup,
-            ),
-            el('div', { class: 'dlg-group' },
-                lblValue,
-                txtValue,
-            ),
+            el('div', { class: 'dlg-group' }, lblValue, txtValue),
             el('p', { class: 'dlg-hint' },
-                '※「設定」/「同じ Z」モードでは新しい Z 値、「加算」モードでは Δ 値を mm 単位で入力します。'),
+                '※「設定」モードでは新しい Z 値、「加算」モードでは Δ を mm 単位で入力します。'),
             el('div', { class: 'dlg-buttons' },
                 el('button', { type: 'button', class: 'btn', onclick: () => root._close(null) }, 'キャンセル'),
                 el('button', {
@@ -192,17 +163,6 @@
                                 return;
                             }
                             root._close({ mode: 'subtractS', value: sZmm });
-                            return;
-                        }
-                        if (rdSameZ.checked) {
-                            if (cmbGroup.selectedIndex < 0) {
-                                alert('対象 Z を選択してください。');
-                                return;
-                            }
-                            const v = tryParse(txtValue.value);
-                            if (v === null) { alert(`無効な数値です: ${txtValue.value}`); return; }
-                            const srcZ = parseFloat(cmbGroup.value);
-                            root._close({ mode: 'sameZ', value: v, sourceZmm: srcZ });
                             return;
                         }
                         const v = tryParse(txtValue.value);
@@ -217,5 +177,73 @@
         return await showModal(root);
     }
 
-    global.Dialogs = { openSingleZEdit, openBulkZEdit };
+    /* =====================================================
+     * 同じ Z 値の P 杭グループに対する変更 (Set / AddDelta)
+     * @param {Array<{zmm:number,count:number}>} pZGroups
+     * @returns {Promise<null | {mode:'setGroup'|'addGroup', value:number, sourceZmm:number}>}
+     * ===================================================== */
+    async function openGroupPilesEdit(pZGroups) {
+        const cmbGroup = el('select', { class: 'dlg-input mono' });
+        for (const g of pZGroups) {
+            const opt = el('option', { value: String(g.zmm) },
+                `Z = ${String(g.zmm).padStart(12)} mm  (${g.count} 本)`);
+            cmbGroup.appendChild(opt);
+        }
+        if (pZGroups.length > 0) cmbGroup.selectedIndex = 0;
+
+        const rdSet = el('input', { type: 'radio', name: 'grpmode', value: 'setGroup', checked: true });
+        const rdAdd = el('input', { type: 'radio', name: 'grpmode', value: 'addGroup' });
+
+        const lblValue = el('label', { class: 'dlg-label' }, '新しい Z 値 (mm):');
+        const txtValue = el('input', { type: 'text', class: 'dlg-input mono', value: '0' });
+
+        function updateLabel() {
+            lblValue.textContent = rdAdd.checked ? '加算する値 Δ (mm):' : '新しい Z 値 (mm):';
+        }
+        [rdSet, rdAdd].forEach(r => r.addEventListener('change', updateLabel));
+
+        const root = el('div', { class: 'dlg-body' },
+            el('h3', { class: 'dlg-title' }, 'P 杭の Z — グループ変更'),
+            el('div', { class: 'dlg-summary' },
+                `対象: 同じ Z 値の P 杭群 (${pZGroups.length} グループ)`),
+            el('div', { class: 'dlg-section' }, '対象グループ'),
+            el('div', { class: 'dlg-group' },
+                el('span', { class: 'dlg-sublabel' }, '対象 Z:'),
+                cmbGroup,
+            ),
+            el('div', { class: 'dlg-section' }, '操作モード'),
+            el('label', { class: 'dlg-radio' }, rdSet, ' このグループを新しい Z 値に設定  (Z = 値)'),
+            el('label', { class: 'dlg-radio' }, rdAdd, ' このグループに加算する  (Z = Z + Δ)'),
+            el('div', { class: 'dlg-group' }, lblValue, txtValue),
+            el('div', { class: 'dlg-buttons' },
+                el('button', { type: 'button', class: 'btn', onclick: () => root._close(null) }, 'キャンセル'),
+                el('button', {
+                    type: 'button', class: 'btn btn-primary',
+                    onclick: () => {
+                        if (cmbGroup.selectedIndex < 0) {
+                            alert('対象 Z を選択してください。');
+                            return;
+                        }
+                        const v = tryParse(txtValue.value);
+                        if (v === null) { alert(`無効な数値です: ${txtValue.value}`); return; }
+                        const srcZ = parseFloat(cmbGroup.value);
+                        root._close({
+                            mode: rdSet.checked ? 'setGroup' : 'addGroup',
+                            value: v,
+                            sourceZmm: srcZ,
+                        });
+                    },
+                }, 'OK'),
+            ),
+        );
+
+        updateLabel();
+        return await showModal(root);
+    }
+
+    global.Dialogs = {
+        openSingleZEdit,
+        openAllPilesEdit,
+        openGroupPilesEdit,
+    };
 })(window);

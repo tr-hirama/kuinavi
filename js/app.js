@@ -20,7 +20,8 @@
     const btnClear = $('btnClear');
     const btnExport = $('btnExport');
     const btnEditSelectedZ = $('btnEditSelectedZ');
-    const btnBulkEditZ = $('btnBulkEditZ');
+    const btnGroupEditZ = $('btnGroupEditZ');
+    const btnAllEditZ = $('btnAllEditZ');
     const outputName = $('outputName');
     const encodingSel = $('encoding');
     const gridHeader = $('gridHeader');
@@ -55,7 +56,8 @@
     btnClear.addEventListener('click', onClear);
     btnExport.addEventListener('click', onExport);
     btnEditSelectedZ.addEventListener('click', onEditSelectedZ);
-    btnBulkEditZ.addEventListener('click', onBulkEditZ);
+    btnGroupEditZ.addEventListener('click', onGroupEditZ);
+    btnAllEditZ.addEventListener('click', onAllEditZ);
     outputName.addEventListener('input', updateExportButtonState);
 
     dropzone.addEventListener('click', onSelectFile);
@@ -341,77 +343,93 @@
         setStatus(`${p.name} の Z を ${G.fmt(result)} mm に変更しました`);
     }
 
-    async function onBulkEditZ() {
-        if (_rows.length === 0) return;
-        const pIndexes = [];
+    function collectPIndexes() {
+        const out = [];
         for (let i = 0; i < _rows.length; i++) {
-            if (G.startsWith(_rows[i].name, 'P')) pIndexes.push(i);
+            if (G.startsWith(_rows[i].name, 'P')) out.push(i);
         }
-        if (pIndexes.length === 0) {
-            alert('P 杭が見つかりません。');
-            return;
-        }
-        const sRow = _rows.find(r => G.isSPoint(r.name));
-        const sZmm = sRow ? (sRow.inZ != null ? sRow.inZ : 0) : null;
+        return out;
+    }
 
-        // Z 値ごとのグループ
-        const groupMap = new Map();
+    function getSZmm() {
+        const sRow = _rows.find(r => G.isSPoint(r.name));
+        return sRow ? (sRow.inZ != null ? sRow.inZ : 0) : null;
+    }
+
+    function getPZGroups(pIndexes) {
+        const map = new Map();
         for (const i of pIndexes) {
             const z = _rows[i].inZ != null ? _rows[i].inZ : 0;
             const k = Math.round(z * 1e6) / 1e6;
-            groupMap.set(k, (groupMap.get(k) || 0) + 1);
+            map.set(k, (map.get(k) || 0) + 1);
         }
-        const pZGroups = Array.from(groupMap.entries())
+        return Array.from(map.entries())
             .sort((a, b) => a[0] - b[0])
             .map(([zmm, count]) => ({ zmm, count }));
+    }
 
-        const result = await window.Dialogs.openBulkZEdit(pIndexes.length, sZmm, pZGroups);
+    async function onAllEditZ() {
+        if (_rows.length === 0) return;
+        const pIndexes = collectPIndexes();
+        if (pIndexes.length === 0) { alert('P 杭が見つかりません。'); return; }
+
+        const sZmm = getSZmm();
+        const result = await window.Dialogs.openAllPilesEdit(pIndexes.length, sZmm);
         if (result === null) return;
 
-        let targetIndexes, compute;
+        let compute, desc;
         switch (result.mode) {
             case 'setAll':
-                targetIndexes = pIndexes;
                 compute = () => result.value;
+                desc = `全 ${pIndexes.length} 本の P を Z=${G.fmt(result.value)} mm に設定`;
                 break;
             case 'addDelta':
-                targetIndexes = pIndexes;
                 compute = (idx) => (_rows[idx].inZ != null ? _rows[idx].inZ : 0) + result.value;
+                desc = `全 ${pIndexes.length} 本の P に Z+=${G.fmt(result.value)} mm を加算`;
                 break;
             case 'subtractS':
-                targetIndexes = pIndexes;
                 compute = (idx) => (_rows[idx].inZ != null ? _rows[idx].inZ : 0) - result.value;
+                desc = `全 ${pIndexes.length} 本の P から S 点 Z (${G.fmt(result.value)} mm) を減算`;
                 break;
-            case 'sameZ': {
-                const srcKey = Math.round(result.sourceZmm * 1e6) / 1e6;
-                targetIndexes = pIndexes.filter(i => {
-                    const z = _rows[i].inZ != null ? _rows[i].inZ : 0;
-                    return (Math.round(z * 1e6) / 1e6) === srcKey;
-                });
-                compute = () => result.value;
-                break;
-            }
             default:
                 return;
         }
 
+        updateRowsZ(pIndexes, compute);
+        setStatus(desc);
+    }
+
+    async function onGroupEditZ() {
+        if (_rows.length === 0) return;
+        const pIndexes = collectPIndexes();
+        if (pIndexes.length === 0) { alert('P 杭が見つかりません。'); return; }
+
+        const pZGroups = getPZGroups(pIndexes);
+        if (pZGroups.length === 0) { alert('Z 値のグループが見つかりません。'); return; }
+
+        const result = await window.Dialogs.openGroupPilesEdit(pZGroups);
+        if (result === null) return;
+
+        const srcKey = Math.round(result.sourceZmm * 1e6) / 1e6;
+        const targetIndexes = pIndexes.filter(i => {
+            const z = _rows[i].inZ != null ? _rows[i].inZ : 0;
+            return (Math.round(z * 1e6) / 1e6) === srcKey;
+        });
         if (targetIndexes.length === 0) {
             alert('対象となる P 杭がありません。');
             return;
         }
-        updateRowsZ(targetIndexes, compute);
 
-        let desc;
-        switch (result.mode) {
-            case 'setAll':
-                desc = `全 ${targetIndexes.length} 本の P を Z=${G.fmt(result.value)} mm に設定`; break;
-            case 'addDelta':
-                desc = `全 ${targetIndexes.length} 本の P に Z+=${G.fmt(result.value)} mm を加算`; break;
-            case 'subtractS':
-                desc = `全 ${targetIndexes.length} 本の P から S 点 Z (${G.fmt(result.value)} mm) を減算`; break;
-            case 'sameZ':
-                desc = `${targetIndexes.length} 本の P (Z=${G.fmt(result.sourceZmm)} mm) を Z=${G.fmt(result.value)} mm に変更`; break;
+        let compute, desc;
+        if (result.mode === 'setGroup') {
+            compute = () => result.value;
+            desc = `${targetIndexes.length} 本の P (Z=${G.fmt(result.sourceZmm)} mm) を Z=${G.fmt(result.value)} mm に変更`;
+        } else {
+            compute = (idx) => (_rows[idx].inZ != null ? _rows[idx].inZ : 0) + result.value;
+            desc = `${targetIndexes.length} 本の P (Z=${G.fmt(result.sourceZmm)} mm) に Z+=${G.fmt(result.value)} mm を加算`;
         }
+
+        updateRowsZ(targetIndexes, compute);
         setStatus(desc);
     }
 
@@ -497,7 +515,8 @@
 
     function updateEditButtonStates() {
         const hasP = _rows.some(r => G.startsWith(r.name, 'P'));
-        btnBulkEditZ.disabled = !hasP;
+        btnAllEditZ.disabled = !hasP;
+        btnGroupEditZ.disabled = !hasP;
         const selIsP = _selectedIndex >= 0
             && _selectedIndex < _rows.length
             && G.startsWith(_rows[_selectedIndex].name, 'P');
