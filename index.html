@@ -159,19 +159,19 @@
             <!-- 右ペイン: タブ (配置図 / 生データ) -->
             <div class="panel-preview">
                 <div class="tabs">
-                    <div class="tab active" data-pane="paneRaw" id="tabRaw">
-                        <svg><use href="#i-code"/></svg><span id="tabRawText">読み込んだ CSV</span>
-                    </div>
-                    <div class="tab" data-pane="panePlot" id="tabPlot">
+                    <div class="tab active" data-pane="panePlot" id="tabPlot">
                         <svg><use href="#i-map"/></svg><span id="tabPlotText">配置図 (P 杭)</span>
+                    </div>
+                    <div class="tab" data-pane="paneRaw" id="tabRaw">
+                        <svg><use href="#i-code"/></svg><span id="tabRawText">読み込んだ CSV</span>
                     </div>
                 </div>
                 <div class="tab-panes">
-                    <div class="tab-pane active" id="paneRaw">
-                        <textarea id="rawText" class="raw-text" readonly placeholder="ここに CSV の生データが表示されます"></textarea>
-                    </div>
-                    <div class="tab-pane" id="panePlot">
+                    <div class="tab-pane active" id="panePlot">
                         <canvas id="plotCanvas"></canvas>
+                    </div>
+                    <div class="tab-pane" id="paneRaw">
+                        <textarea id="rawText" class="raw-text" readonly placeholder="ここに CSV の生データが表示されます"></textarea>
                     </div>
                 </div>
             </div>
