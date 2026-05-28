@@ -558,36 +558,45 @@
         updateExportButtonState();
     }
 
-    // 「参照...」: ネイティブ保存ダイアログで保存先を選択 (ハンドルだけ確保、書き込みはまだ行わない)
+    // 「別名保存...」: ネイティブ保存ダイアログを開き、「保存」を押すとその場で書き込み
     async function onBrowse() {
         if (_rows.length === 0) {
-            alert('CSV を読み込んでから「参照」してください。');
+            alert('CSV を読み込んでから「別名保存」してください。');
             return;
         }
         if (typeof window.showSaveFilePicker !== 'function') {
+            // ブラウザが File System Access API 非対応 → 通常ダウンロードへフォールバック
             alert(
-                'このブラウザは「保存先選択ダイアログ」(File System Access API) に対応していません。\n\n' +
-                'Chrome / Edge をお使いください。\n' +
-                'Firefox / Safari でも「GL.csv を保存」ボタンからダウンロードフォルダへの保存は可能です。'
+                'このブラウザは保存先選択ダイアログ (File System Access API) に対応していません。\n' +
+                'Downloads フォルダへダウンロード保存します。'
             );
+            await onExport();
             return;
         }
         let suggested = extractFilename(outputName.value);
         if (!suggested) suggested = 'GL.csv';
         if (!/\.csv$/i.test(suggested)) suggested += '.csv';
+
+        const built = buildOutputBytes();
+        if (built === null) return;
+        const { bytes, label } = built;
+
         try {
             const handle = await window.showSaveFilePicker({
                 suggestedName: suggested,
                 types: [{ description: 'CSV files', accept: { 'text/csv': ['.csv'] } }],
             });
+            const writable = await handle.createWritable();
+            await writable.write(bytes);
+            await writable.close();
             _outputHandle = handle;
             outputName.value = handle.name;
             updateExportButtonState();
-            setStatus(`保存先を選択しました: ${handle.name}  (「GL.csv を保存」を押すと書き込みます)`);
+            setStatus(`保存しました: ${handle.name}  (${_rows.length} 点 / ${label})`);
         } catch (e) {
             if (e && e.name === 'AbortError') return;
             console.error(e);
-            alert('保存先の選択に失敗しました:\n' + (e && e.message || e));
+            alert('保存に失敗しました:\n' + (e && e.message || e));
         }
     }
 
