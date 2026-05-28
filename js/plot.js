@@ -6,10 +6,11 @@
 (function (global) {
     'use strict';
 
+    // フォールバック用 (通常は app.js 側で r.color が設定済み)
     const palette = [
-        '#4682DC',  // 青
-        '#E66E46',  // オレンジレッド
-        '#3CA05A',  // 緑
+        '#5DADE2',  // 水色
+        '#A8D86A',  // 薄緑
+        '#E74C3C',  // 朱色
         '#B48232',  // 黄土
         '#965AB4',  // 紫
         '#32AAAA',  // ティール

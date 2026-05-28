@@ -50,10 +50,17 @@
     let _suggestedName = '';        // 出力ファイル名 (入力CSV名から自動生成)
     let _paletteIdx = 0;            // 次に割り当てるパレット index
 
-    // P 杭の Z 値ごとの色パレット (plot.js と一致)
+    // P 杭の Z 値ごとの色パレット (本数の多い順に割当)
+    //   #1 水色 / #2 薄緑 / #3 朱色 / 以降 黄土・紫・ティール・ピンク・ブラウン
     const PALETTE = [
-        '#4682DC', '#E66E46', '#3CA05A', '#B48232',
-        '#965AB4', '#32AAAA', '#DC5082', '#786450',
+        '#5DADE2',  // 水色 (最多)
+        '#A8D86A',  // 薄緑 (次点)
+        '#E74C3C',  // 朱色 (3 番目)
+        '#B48232',  // 黄土
+        '#965AB4',  // 紫
+        '#32AAAA',  // ティール
+        '#DC5082',  // ピンク
+        '#786450',  // ブラウン
     ];
 
     // ---- 配置図 ----
@@ -501,27 +508,29 @@
         return c;
     }
 
-    // 読込直後: P 杭の各 Z グループ (低い順) にパレット色を順次割り当て
+    // 読込直後: P 杭の各 Z グループに「本数の多い順」でパレット色を割り当て
+    //   同数の場合は Z 値が小さい方を優先
     function assignInitialColors() {
-        const seen = new Map();  // Z (mm) rounded → color
-        const sorted = _rows
-            .map((r, i) => ({ r, i }))
-            .filter(x => G.startsWith(x.r.name, 'P'))
-            .sort((a, b) => {
-                const za = a.r.inZ != null ? a.r.inZ : 0;
-                const zb = b.r.inZ != null ? b.r.inZ : 0;
-                return za - zb;
-            });
-        for (const { r } of sorted) {
+        const groups = new Map();  // Z(mm) rounded → { count, z }
+        for (const r of _rows) {
+            if (!G.startsWith(r.name, 'P')) continue;
             const z = r.inZ != null ? r.inZ : 0;
             const k = Math.round(z * 1e6) / 1e6;
-            if (!seen.has(k)) seen.set(k, nextPaletteColor());
+            if (!groups.has(k)) groups.set(k, { count: 0, z });
+            groups.get(k).count++;
+        }
+        // 本数 DESC → Z ASC でソート
+        const ordered = Array.from(groups.entries())
+            .sort((a, b) => (b[1].count - a[1].count) || (a[1].z - b[1].z));
+        const colorByZ = new Map();
+        for (const [k] of ordered) {
+            colorByZ.set(k, nextPaletteColor());
         }
         for (const r of _rows) {
             if (!G.startsWith(r.name, 'P')) continue;
             const z = r.inZ != null ? r.inZ : 0;
             const k = Math.round(z * 1e6) / 1e6;
-            r.color = seen.get(k);
+            r.color = colorByZ.get(k);
         }
     }
 
