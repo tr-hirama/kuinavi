@@ -22,8 +22,6 @@
     const btnEditSelectedZ = $('btnEditSelectedZ');
     const btnGroupEditZ = $('btnGroupEditZ');
     const btnAllEditZ = $('btnAllEditZ');
-    const outputName = $('outputName');
-    const btnBrowse = $('btnBrowse');
     const encodingSel = $('encoding');
     const gridHeader = $('gridHeader');
     const gridBody = $('gridBody');
@@ -49,6 +47,7 @@
     let _selectedIndex = -1;        // 選択行 index
     let _editedZ = new Set();       // Z 値が編集された行 index (緑強調用)
     let _outputHandle = null;       // File System Access API のファイルハンドル
+    let _suggestedName = '';        // 出力ファイル名 (入力CSV名から自動生成)
 
     // ---- 配置図 ----
     const plot = new window.PlotPanel(canvas);
@@ -62,11 +61,9 @@
     btnSelect.addEventListener('click', onSelectFile);
     btnClear.addEventListener('click', onClear);
     btnExport.addEventListener('click', onExport);
-    btnBrowse.addEventListener('click', onBrowse);
     btnEditSelectedZ.addEventListener('click', onEditSelectedZ);
     btnGroupEditZ.addEventListener('click', onGroupEditZ);
     btnAllEditZ.addEventListener('click', onAllEditZ);
-    outputName.addEventListener('input', onOutputNameChanged);
 
     dropzone.addEventListener('click', onSelectFile);
     ['dragenter', 'dragover'].forEach(ev => {
@@ -151,7 +148,7 @@
             updateGridHeader();
             updatePlotTabTitle();
 
-            outputName.value = G.suggestOutputName(file.name);
+            _suggestedName = G.suggestOutputName(file.name);
             plot.setData(_rows);
 
             updateExportButtonState();
@@ -177,7 +174,7 @@
         outText.value = '';
         outInfo.textContent = 'プレビュー';
         btnCopyOut.disabled = true;
-        outputName.value = '';
+        _suggestedName = '';
         gridHeader.textContent = '読み込み待ち';
         tabPlotText.textContent = '配置図 (P 杭)';
         plot.setData([]);
@@ -511,11 +508,6 @@
     }
 
     // ---- 保存関連ヘルパ ----
-    function extractFilename(path) {
-        if (!path) return '';
-        return String(path).replace(/^.*[\\/]/, '').trim();
-    }
-
     function buildOutputBytes() {
         const csvText = G.buildCsv(_rows);
         const encType = encodingSel.value;
@@ -550,77 +542,17 @@
         };
     }
 
-    function onOutputNameChanged() {
-        // 入力欄が編集された場合: ハンドルとファイル名が一致しなければ無効化
-        if (_outputHandle && extractFilename(outputName.value) !== _outputHandle.name) {
-            _outputHandle = null;
-        }
-        updateExportButtonState();
-    }
-
-    // 「別名保存...」: ネイティブ保存ダイアログを開き、「保存」を押すとその場で書き込み
-    async function onBrowse() {
-        if (_rows.length === 0) {
-            alert('CSV を読み込んでから「別名保存」してください。');
-            return;
-        }
-        if (typeof window.showSaveFilePicker !== 'function') {
-            // ブラウザが File System Access API 非対応 → 通常ダウンロードへフォールバック
-            alert(
-                'このブラウザは保存先選択ダイアログ (File System Access API) に対応していません。\n' +
-                'Downloads フォルダへダウンロード保存します。'
-            );
-            await onExport();
-            return;
-        }
-        let suggested = extractFilename(outputName.value);
-        if (!suggested) suggested = 'GL.csv';
-        if (!/\.csv$/i.test(suggested)) suggested += '.csv';
-
-        const built = buildOutputBytes();
-        if (built === null) return;
-        const { bytes, label } = built;
-
-        try {
-            const handle = await window.showSaveFilePicker({
-                suggestedName: suggested,
-                types: [{ description: 'CSV files', accept: { 'text/csv': ['.csv'] } }],
-            });
-            const writable = await handle.createWritable();
-            await writable.write(bytes);
-            await writable.close();
-            _outputHandle = handle;
-            outputName.value = handle.name;
-            updateExportButtonState();
-            setStatus(`保存しました: ${handle.name}  (${_rows.length} 点 / ${label})`);
-        } catch (e) {
-            if (e && e.name === 'AbortError') return;
-            console.error(e);
-            alert('保存に失敗しました:\n' + (e && e.message || e));
-        }
-    }
-
     async function onExport() {
         if (_rows.length === 0) return;
-        const rawInput = (outputName.value || '').trim();
-        if (!rawInput) {
-            alert('出力ファイル名を入力してください。');
-            outputName.focus();
-            return;
-        }
-        let name = extractFilename(rawInput);
-        if (!name) {
-            alert('ファイル名部分が空です。フルパスの末尾にファイル名を含めてください。');
-            outputName.focus();
-            return;
-        }
+
+        let name = _suggestedName || 'GL.csv';
         if (!/\.csv$/i.test(name)) name += '.csv';
 
         const built = buildOutputBytes();
         if (built === null) return;
         const { bytes, mime, label } = built;
 
-        // 1) 既に参照済みのハンドルがあればそのまま書き込み
+        // 1) 既に保存先ハンドル保持中なら、ダイアログなしで同じ場所へ上書き
         if (_outputHandle) {
             try {
                 const writable = await _outputHandle.createWritable();
@@ -630,13 +562,13 @@
                 return;
             } catch (e) {
                 console.error(e);
-                alert('指定ハンドルへの書き込みに失敗しました。再度「参照」してください。\n' + (e && e.message || e));
+                alert('既存ファイルへの書き込みに失敗しました。再度ダイアログから保存してください。\n' + (e && e.message || e));
                 _outputHandle = null;
                 // フォールバックに進む
             }
         }
 
-        // 2) File System Access API が使えれば、その場でネイティブ保存ダイアログを開く
+        // 2) File System Access API が使えれば、ネイティブ保存ダイアログを開く
         if (typeof window.showSaveFilePicker === 'function') {
             try {
                 const handle = await window.showSaveFilePicker({
@@ -647,8 +579,6 @@
                 await writable.write(bytes);
                 await writable.close();
                 _outputHandle = handle;
-                outputName.value = handle.name;
-                updateExportButtonState();
                 setStatus(`保存しました: ${handle.name}  (${_rows.length} 点 / ${label})`);
                 return;
             } catch (e) {
@@ -674,10 +604,7 @@
 
     // ---- ボタン状態 ----
     function updateExportButtonState() {
-        const hasData = _rows.length > 0;
-        const hasName = outputName.value.trim().length > 0;
-        btnExport.disabled = !(hasData && hasName);
-        btnBrowse.disabled = !hasData;
+        btnExport.disabled = !(_rows.length > 0);
     }
 
     function updateEditButtonStates() {
