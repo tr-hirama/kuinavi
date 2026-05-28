@@ -48,6 +48,13 @@
     let _editedZ = new Set();       // Z 値が編集された行 index (緑強調用)
     let _outputHandle = null;       // File System Access API のファイルハンドル
     let _suggestedName = '';        // 出力ファイル名 (入力CSV名から自動生成)
+    let _paletteIdx = 0;            // 次に割り当てるパレット index
+
+    // P 杭の Z 値ごとの色パレット (plot.js と一致)
+    const PALETTE = [
+        '#4682DC', '#E66E46', '#3CA05A', '#B48232',
+        '#965AB4', '#32AAAA', '#DC5082', '#786450',
+    ];
 
     // ---- 配置図 ----
     const plot = new window.PlotPanel(canvas);
@@ -141,6 +148,8 @@
             _editedZ = new Set();
             _selectedIndex = -1;
             _outputHandle = null;
+            _paletteIdx = 0;
+            assignInitialColors();
 
             populateGrid();
             populateRawText();
@@ -169,6 +178,7 @@
         _editedZ = new Set();
         _selectedIndex = -1;
         _outputHandle = null;
+        _paletteIdx = 0;
         gridBody.innerHTML = '';
         rawText.value = '';
         outText.value = '';
@@ -446,7 +456,7 @@
                 return;
         }
 
-        updateRowsZ(pIndexes, compute);
+        updateRowsZ(pIndexes, compute, { preserveColor: true });
         setStatus(desc);
     }
 
@@ -484,15 +494,86 @@
         setStatus(desc);
     }
 
-    function updateRowsZ(indexes, compute) {
+    // ---- 色の割り当て ----
+    function nextPaletteColor() {
+        const c = PALETTE[_paletteIdx % PALETTE.length];
+        _paletteIdx++;
+        return c;
+    }
+
+    // 読込直後: P 杭の各 Z グループ (低い順) にパレット色を順次割り当て
+    function assignInitialColors() {
+        const seen = new Map();  // Z (mm) rounded → color
+        const sorted = _rows
+            .map((r, i) => ({ r, i }))
+            .filter(x => G.startsWith(x.r.name, 'P'))
+            .sort((a, b) => {
+                const za = a.r.inZ != null ? a.r.inZ : 0;
+                const zb = b.r.inZ != null ? b.r.inZ : 0;
+                return za - zb;
+            });
+        for (const { r } of sorted) {
+            const z = r.inZ != null ? r.inZ : 0;
+            const k = Math.round(z * 1e6) / 1e6;
+            if (!seen.has(k)) seen.set(k, nextPaletteColor());
+        }
+        for (const r of _rows) {
+            if (!G.startsWith(r.name, 'P')) continue;
+            const z = r.inZ != null ? r.inZ : 0;
+            const k = Math.round(z * 1e6) / 1e6;
+            r.color = seen.get(k);
+        }
+    }
+
+    // 個別/グループ編集時: 変更行の色を決定
+    //   - 既存の (未変更の) P 行に同じ新 Z があれば、その色を使う
+    //   - なければ次のパレット色を割り当て
+    //   - 同一バッチ内で同じ新 Z が複数あれば、それらは同色
+    function resolveNewColors(indexes, newZs) {
+        const result = new Map();         // idx → color
+        const cacheByZ = new Map();       // newZ key → color (バッチ内共有)
+        const updatedSet = new Set(indexes);
+        for (const idx of indexes) {
+            const newZ = newZs.get(idx);
+            const k = Math.round(newZ * 1e6) / 1e6;
+            if (cacheByZ.has(k)) { result.set(idx, cacheByZ.get(k)); continue; }
+            // 未変更の P 行で同じ Z を探す
+            let found = null;
+            for (let i = 0; i < _rows.length; i++) {
+                if (updatedSet.has(i)) continue;
+                const r = _rows[i];
+                if (!G.startsWith(r.name, 'P')) continue;
+                const z = r.inZ != null ? r.inZ : 0;
+                if (Math.round(z * 1e6) / 1e6 === k) { found = r.color || null; break; }
+            }
+            const color = found || nextPaletteColor();
+            cacheByZ.set(k, color);
+            result.set(idx, color);
+        }
+        return result;
+    }
+
+    function updateRowsZ(indexes, compute, opts) {
+        opts = opts || {};
+        const preserveColor = !!opts.preserveColor;
+
+        // 新 Z 値を先に計算
+        const newZs = new Map();
         for (const idx of indexes) {
             if (idx < 0 || idx >= _rows.length) continue;
-            const newZ = compute(idx);
+            newZs.set(idx, compute(idx));
+        }
+        // 色を割り当て (preserveColor=true なら何もしない)
+        const newColors = preserveColor ? null : resolveNewColors(Array.from(newZs.keys()), newZs);
+
+        for (const idx of newZs.keys()) {
+            const newZ = newZs.get(idx);
             const r = _rows[idx];
-            _rows[idx] = Object.assign({}, r, {
-                inZ: newZ,
-                outZ: newZ / 1000.0,
-            });
+            const updates = { inZ: newZ, outZ: newZ / 1000.0 };
+            if (newColors && G.startsWith(r.name, 'P')) {
+                updates.color = newColors.get(idx);
+            }
+            _rows[idx] = Object.assign({}, r, updates);
             _editedZ.add(idx);
             refreshRow(idx);
         }

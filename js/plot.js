@@ -238,17 +238,13 @@
                 ctx.fillText(r.name, p.x + 7, p.y - 12);
             }
 
-            // P 点 (Z 値ごとに色分け)
-            const pZValues = Array.from(new Set(
-                rows.filter(r => G.startsWith(r.name, 'P')).map(r => keyZ(r.outZ))
-            )).sort((a, b) => a - b);
-            const pColorMap = new Map();
-            pZValues.forEach((z, i) => pColorMap.set(z, palette[i % palette.length]));
-
+            // P 点 — 各行に格納された color フィールドをそのまま使用
+            //   (色の割り当ては app.js が管理: 編集モードによって色を保つか変えるか制御)
+            const pRows = rows.filter(r => G.startsWith(r.name, 'P'));
             ctx.font = 'bold 11px "Yu Gothic UI", "Yu Gothic", sans-serif';
-            for (const r of rows.filter(r => G.startsWith(r.name, 'P'))) {
+            for (const r of pRows) {
                 const p = toPx(r.outX, r.outY);
-                const color = pColorMap.get(keyZ(r.outZ)) || '#4169E1';
+                const color = r.color || palette[0];
                 const dark = darken(color);
                 ctx.fillStyle = color;
                 ctx.strokeStyle = dark;
@@ -260,6 +256,20 @@
                 ctx.fillStyle = dark;
                 ctx.fillText(r.name, p.x + 6, p.y - 10);
             }
+
+            // 凡例用: 色ごとに現在の Z 値をまとめる
+            const legendByColor = new Map();  // color → Set<Z>
+            for (const r of pRows) {
+                const c = r.color || palette[0];
+                if (!legendByColor.has(c)) legendByColor.set(c, new Set());
+                legendByColor.get(c).add(keyZ(r.outZ));
+            }
+            const legendEntries = Array.from(legendByColor.entries())
+                .map(([color, zSet]) => ({
+                    color,
+                    zs: Array.from(zSet).sort((a, b) => a - b),
+                }))
+                .sort((a, b) => a.zs[0] - b.zs[0]);
 
             // 選択行のハイライト
             if (this.selectedIndex >= 0 && this.selectedIndex < rows.length
@@ -278,7 +288,7 @@
             ctx.restore();
 
             // 凡例 (クリップ外)
-            this._drawLegend(ctx, cssW - marginR + 10, marginT, pZValues, pColorMap);
+            this._drawLegend(ctx, cssW - marginR + 10, marginT, legendEntries);
 
             // 倍率表示 (クリップ外)
             ctx.fillStyle = '#696969';
@@ -303,7 +313,7 @@
             ctx.textBaseline = 'alphabetic';
         }
 
-        _drawLegend(ctx, x, y, pZValues, pColorMap) {
+        _drawLegend(ctx, x, y, legendEntries) {
             ctx.textBaseline = 'top';
             const rowH = 18;
             ctx.fillStyle = '#000';
@@ -312,13 +322,13 @@
             y += rowH;
 
             ctx.font = '11.5px "Yu Gothic UI", "Yu Gothic", sans-serif';
-            if (pZValues.length === 0) {
+            if (legendEntries.length === 0) {
                 ctx.fillStyle = '#808080';
                 ctx.fillText('(なし)', x + 4, y);
                 y += rowH;
             } else {
-                for (const z of pZValues) {
-                    const color = pColorMap.get(z);
+                for (const entry of legendEntries) {
+                    const color = entry.color;
                     const dark = darken(color);
                     ctx.fillStyle = color;
                     ctx.beginPath();
@@ -328,7 +338,16 @@
                     ctx.lineWidth = 1.2;
                     ctx.stroke();
                     ctx.fillStyle = '#000';
-                    ctx.fillText(`Z = ${z.toFixed(3)} m`, x + 14, y);
+                    // 同色に複数 Z があれば併記 (3 個まで、超過は省略)
+                    let label;
+                    if (entry.zs.length === 1) {
+                        label = `Z = ${entry.zs[0].toFixed(3)} m`;
+                    } else if (entry.zs.length <= 3) {
+                        label = `Z = ${entry.zs.map(z => z.toFixed(3)).join(', ')} m`;
+                    } else {
+                        label = `Z = ${entry.zs.slice(0, 2).map(z => z.toFixed(3)).join(', ')}… (${entry.zs.length} 値)`;
+                    }
+                    ctx.fillText(label, x + 14, y);
                     y += rowH;
                 }
             }
