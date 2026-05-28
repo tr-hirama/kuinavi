@@ -27,11 +27,16 @@
     const gridHeader = $('gridHeader');
     const gridBody = $('gridBody');
     const rawText = $('rawText');
+    const outText = $('outText');
+    const outInfo = $('outInfo');
+    const btnCopyOut = $('btnCopyOut');
     const tabRaw = $('tabRaw');
     const tabPlot = $('tabPlot');
+    const tabOut = $('tabOut');
     const tabPlotText = $('tabPlotText');
     const paneRaw = $('paneRaw');
     const panePlot = $('panePlot');
+    const paneOut = $('paneOut');
     const statusbar = $('statusbar');
     const splitter = $('splitter');
     const canvas = $('plotCanvas');
@@ -90,16 +95,18 @@
         loadFile(e.dataTransfer.files[0]);
     });
 
-    // タブ切替
-    function activateTab(tabEl, paneEl) {
-        [tabRaw, tabPlot].forEach(t => t.classList.remove('active'));
-        [paneRaw, panePlot].forEach(p => p.classList.remove('active'));
-        tabEl.classList.add('active');
-        paneEl.classList.add('active');
-        if (paneEl === panePlot) plot.resize();
+    // タブ切替 (タブ-ペアを data-pane で対応付け)
+    const allTabs = document.querySelectorAll('.tabs .tab');
+    const allPanes = document.querySelectorAll('.tab-panes .tab-pane');
+    function activateTab(tabEl) {
+        const paneId = tabEl.dataset.pane;
+        allTabs.forEach(t => t.classList.toggle('active', t === tabEl));
+        allPanes.forEach(p => p.classList.toggle('active', p.id === paneId));
+        if (paneId === 'panePlot') plot.resize();
     }
-    tabRaw.addEventListener('click', () => activateTab(tabRaw, paneRaw));
-    tabPlot.addEventListener('click', () => activateTab(tabPlot, panePlot));
+    allTabs.forEach(t => t.addEventListener('click', () => activateTab(t)));
+
+    btnCopyOut.addEventListener('click', onCopyOutput);
 
     // スプリッタ (左右ペイン サイズ調整)
     initSplitter();
@@ -136,6 +143,7 @@
 
             populateGrid();
             populateRawText();
+            populateOutputText();
             updateGridHeader();
             updatePlotTabTitle();
 
@@ -161,6 +169,9 @@
         _selectedIndex = -1;
         gridBody.innerHTML = '';
         rawText.value = '';
+        outText.value = '';
+        outInfo.textContent = 'プレビュー';
+        btnCopyOut.disabled = true;
         outputName.value = '';
         gridHeader.textContent = '読み込み待ち';
         tabPlotText.textContent = '配置図 (P 杭)';
@@ -172,6 +183,36 @@
 
     function populateRawText() {
         rawText.value = (_rawText || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    }
+
+    function populateOutputText() {
+        const csv = G.buildCsv(_rows);
+        outText.value = csv;
+        const lineCount = _rows.length;
+        const bytes = new Blob([csv]).size;
+        outInfo.textContent = lineCount > 0
+            ? `プレビュー — ${lineCount} 行  /  ${bytes.toLocaleString()} bytes`
+            : 'プレビュー';
+        btnCopyOut.disabled = lineCount === 0;
+    }
+
+    async function onCopyOutput() {
+        const text = outText.value;
+        if (!text) return;
+        try {
+            await navigator.clipboard.writeText(text);
+            setStatus(`出力 CSV をクリップボードにコピーしました (${_rows.length} 行)`);
+        } catch (err) {
+            // フォールバック: textarea 選択 + execCommand
+            outText.focus();
+            outText.select();
+            try {
+                document.execCommand('copy');
+                setStatus(`出力 CSV をクリップボードにコピーしました (${_rows.length} 行)`);
+            } catch (_) {
+                alert('クリップボードへのコピーに失敗しました:\n' + (err && err.message || err));
+            }
+        }
     }
 
     function updateGridHeader() {
@@ -461,6 +502,7 @@
         plot.setData(_rows);
         plot.setSelectedIndex(_selectedIndex);
         updatePlotTabTitle();
+        populateOutputText();
     }
 
     // ---- 保存 ----
