@@ -328,18 +328,52 @@
 
             const G = global.GlConverter;
             const t = this._transform;
-            let best = Infinity, bestIdx = -1;
+
+            // 点の種類ごとの「ヒット半径」と「優先度 (rank)」
+            //   P 杭: 大きく描画 / 編集対象 → 最優先
+            //   K 基準点: 三角形でやや大 → 次点
+            //   H 境界: 小さく描画 / 補助情報 → 直接クリック時のみ
+            function classify(name) {
+                if (G.startsWith(name, 'P')) return { rank: 3, radius: 12 };
+                if (G.startsWith(name, 'K')) return { rank: 2, radius: 12 };
+                if (G.startsWith(name, 'H')) return { rank: 1, radius: 6 };
+                return { rank: 0, radius: 8 };
+            }
+
+            const candidates = [];
             for (let i = 0; i < this.rows.length; i++) {
                 const r = this.rows[i];
                 if (G.isSPoint(r.name)) continue;
                 const px = t.offX + (r.outY - t.minY) * t.scale;
                 const py = t.offY + (t.maxX - r.outX) * t.scale;
                 const dx = px - cx, dy = py - cy;
-                const d2 = dx * dx + dy * dy;
-                if (d2 < best) { best = d2; bestIdx = i; }
+                const d = Math.sqrt(dx * dx + dy * dy);
+                const c = classify(r.name);
+                candidates.push({ idx: i, d, rank: c.rank, radius: c.radius });
             }
-            if (bestIdx >= 0 && this._onSelect) {
-                this._onSelect(bestIdx, Math.sqrt(best));
+            if (candidates.length === 0) return;
+
+            // step 1: ヒット半径内の候補があれば優先度→距離でソート
+            const hits = candidates.filter(c => c.d <= c.radius);
+            let winner = null;
+            if (hits.length > 0) {
+                hits.sort((a, b) => (b.rank - a.rank) || (a.d - b.d));
+                winner = hits[0];
+            } else {
+                // step 2: 半径外なら P/K のみで最寄りを採用 (H 点は遠距離フォールバック対象外)
+                const pk = candidates.filter(c => c.rank >= 2);
+                if (pk.length > 0) {
+                    pk.sort((a, b) => a.d - b.d);
+                    winner = pk[0];
+                } else {
+                    // step 3: P/K が一切なければ最寄り点 (H 含む)
+                    candidates.sort((a, b) => a.d - b.d);
+                    winner = candidates[0];
+                }
+            }
+
+            if (winner && this._onSelect) {
+                this._onSelect(winner.idx, winner.d);
             }
         }
     }
