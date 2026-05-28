@@ -78,6 +78,9 @@
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
         </symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </symbol>
     </svg>
 </head>
 <body>
@@ -102,8 +105,11 @@
             </div>
 
             <div class="field">
-                <span class="field-label">出力ファイル名</span>
-                <input id="outputName" type="text" placeholder="CSV読込で自動入力">
+                <span class="field-label">出力先</span>
+                <input id="outputName" type="text" placeholder="CSV読込で自動入力 (フルパス可)">
+                <button id="btnBrowse" class="btn" disabled title="保存先を参照... (Chrome/Edgeでネイティブダイアログを表示)">
+                    <svg><use href="#i-folder"/></svg>参照
+                </button>
             </div>
 
             <div class="field">

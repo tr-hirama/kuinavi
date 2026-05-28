@@ -23,6 +23,7 @@
     const btnGroupEditZ = $('btnGroupEditZ');
     const btnAllEditZ = $('btnAllEditZ');
     const outputName = $('outputName');
+    const btnBrowse = $('btnBrowse');
     const encodingSel = $('encoding');
     const gridHeader = $('gridHeader');
     const gridBody = $('gridBody');
@@ -47,6 +48,7 @@
     let _inputFileName = null;      // 入力ファイル名
     let _selectedIndex = -1;        // 選択行 index
     let _editedZ = new Set();       // Z 値が編集された行 index (緑強調用)
+    let _outputHandle = null;       // File System Access API のファイルハンドル
 
     // ---- 配置図 ----
     const plot = new window.PlotPanel(canvas);
@@ -60,10 +62,11 @@
     btnSelect.addEventListener('click', onSelectFile);
     btnClear.addEventListener('click', onClear);
     btnExport.addEventListener('click', onExport);
+    btnBrowse.addEventListener('click', onBrowse);
     btnEditSelectedZ.addEventListener('click', onEditSelectedZ);
     btnGroupEditZ.addEventListener('click', onGroupEditZ);
     btnAllEditZ.addEventListener('click', onAllEditZ);
-    outputName.addEventListener('input', updateExportButtonState);
+    outputName.addEventListener('input', onOutputNameChanged);
 
     dropzone.addEventListener('click', onSelectFile);
     ['dragenter', 'dragover'].forEach(ev => {
@@ -140,6 +143,7 @@
             _inputFileName = file.name;
             _editedZ = new Set();
             _selectedIndex = -1;
+            _outputHandle = null;
 
             populateGrid();
             populateRawText();
@@ -167,6 +171,7 @@
         _inputFileName = null;
         _editedZ = new Set();
         _selectedIndex = -1;
+        _outputHandle = null;
         gridBody.innerHTML = '';
         rawText.value = '';
         outText.value = '';
@@ -505,46 +510,146 @@
         populateOutputText();
     }
 
-    // ---- 保存 ----
-    function onExport() {
+    // ---- 保存関連ヘルパ ----
+    function extractFilename(path) {
+        if (!path) return '';
+        return String(path).replace(/^.*[\\/]/, '').trim();
+    }
+
+    function buildOutputBytes() {
+        const csvText = G.buildCsv(_rows);
+        const encType = encodingSel.value;
+        if (encType === 'utf8bom') {
+            return {
+                bytes: G.encodeUtf8WithBom(csvText),
+                mime: 'text/csv;charset=utf-8',
+                label: 'UTF-8 BOM',
+            };
+        }
+        // Shift-JIS
+        let hasNonAscii = false;
+        for (let i = 0; i < csvText.length; i++) {
+            const cp = csvText.charCodeAt(i);
+            if (cp > 0x7F && !(cp >= 0xFF61 && cp <= 0xFF9F)) {
+                hasNonAscii = true;
+                break;
+            }
+        }
+        if (hasNonAscii) {
+            if (!confirm(
+                '出力データに ASCII / 半角カナ以外の文字が含まれています。\n' +
+                'Shift-JIS 簡易エンコーダではこれらは "?" に置換されます。\n' +
+                '「UTF-8 (BOM 付)」を選び直すことをお勧めします。\n\n' +
+                'このまま Shift-JIS で保存しますか？'
+            )) return null;
+        }
+        return {
+            bytes: G.encodeShiftJis(csvText),
+            mime: 'text/csv;charset=shift_jis',
+            label: 'Shift-JIS',
+        };
+    }
+
+    function onOutputNameChanged() {
+        // 入力欄が編集された場合: ハンドルとファイル名が一致しなければ無効化
+        if (_outputHandle && extractFilename(outputName.value) !== _outputHandle.name) {
+            _outputHandle = null;
+        }
+        updateExportButtonState();
+    }
+
+    // 「参照...」: ネイティブ保存ダイアログで保存先を選択 (ハンドルだけ確保、書き込みはまだ行わない)
+    async function onBrowse() {
+        if (_rows.length === 0) {
+            alert('CSV を読み込んでから「参照」してください。');
+            return;
+        }
+        if (typeof window.showSaveFilePicker !== 'function') {
+            alert(
+                'このブラウザは「保存先選択ダイアログ」(File System Access API) に対応していません。\n\n' +
+                'Chrome / Edge をお使いください。\n' +
+                'Firefox / Safari でも「GL.csv を保存」ボタンからダウンロードフォルダへの保存は可能です。'
+            );
+            return;
+        }
+        let suggested = extractFilename(outputName.value);
+        if (!suggested) suggested = 'GL.csv';
+        if (!/\.csv$/i.test(suggested)) suggested += '.csv';
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: suggested,
+                types: [{ description: 'CSV files', accept: { 'text/csv': ['.csv'] } }],
+            });
+            _outputHandle = handle;
+            outputName.value = handle.name;
+            updateExportButtonState();
+            setStatus(`保存先を選択しました: ${handle.name}  (「GL.csv を保存」を押すと書き込みます)`);
+        } catch (e) {
+            if (e && e.name === 'AbortError') return;
+            console.error(e);
+            alert('保存先の選択に失敗しました:\n' + (e && e.message || e));
+        }
+    }
+
+    async function onExport() {
         if (_rows.length === 0) return;
-        let name = (outputName.value || '').trim();
-        if (!name) {
+        const rawInput = (outputName.value || '').trim();
+        if (!rawInput) {
             alert('出力ファイル名を入力してください。');
+            outputName.focus();
+            return;
+        }
+        let name = extractFilename(rawInput);
+        if (!name) {
+            alert('ファイル名部分が空です。フルパスの末尾にファイル名を含めてください。');
             outputName.focus();
             return;
         }
         if (!/\.csv$/i.test(name)) name += '.csv';
 
-        const csvText = G.buildCsv(_rows);
-        const encType = encodingSel.value;
-        let bytes, mime;
-        if (encType === 'utf8bom') {
-            bytes = G.encodeUtf8WithBom(csvText);
-            mime = 'text/csv;charset=utf-8';
-        } else {
-            // Shift-JIS
-            // 非 ASCII 文字を含む場合は警告 (簡易 SJIS 実装のため)
-            let hasNonAscii = false;
-            for (let i = 0; i < csvText.length; i++) {
-                const cp = csvText.charCodeAt(i);
-                if (cp > 0x7F && !(cp >= 0xFF61 && cp <= 0xFF9F)) {
-                    hasNonAscii = true;
-                    break;
-                }
+        const built = buildOutputBytes();
+        if (built === null) return;
+        const { bytes, mime, label } = built;
+
+        // 1) 既に参照済みのハンドルがあればそのまま書き込み
+        if (_outputHandle) {
+            try {
+                const writable = await _outputHandle.createWritable();
+                await writable.write(bytes);
+                await writable.close();
+                setStatus(`保存しました: ${_outputHandle.name}  (${_rows.length} 点 / ${label})`);
+                return;
+            } catch (e) {
+                console.error(e);
+                alert('指定ハンドルへの書き込みに失敗しました。再度「参照」してください。\n' + (e && e.message || e));
+                _outputHandle = null;
+                // フォールバックに進む
             }
-            if (hasNonAscii) {
-                if (!confirm(
-                    '出力データに ASCII / 半角カナ以外の文字が含まれています。\n' +
-                    'Shift-JIS 簡易エンコーダではこれらは "?" に置換されます。\n' +
-                    '「UTF-8 (BOM 付)」を選び直すことをお勧めします。\n\n' +
-                    'このまま Shift-JIS で保存しますか？'
-                )) return;
-            }
-            bytes = G.encodeShiftJis(csvText);
-            mime = 'text/csv;charset=shift_jis';
         }
 
+        // 2) File System Access API が使えれば、その場でネイティブ保存ダイアログを開く
+        if (typeof window.showSaveFilePicker === 'function') {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: name,
+                    types: [{ description: 'CSV files', accept: { 'text/csv': ['.csv'] } }],
+                });
+                const writable = await handle.createWritable();
+                await writable.write(bytes);
+                await writable.close();
+                _outputHandle = handle;
+                outputName.value = handle.name;
+                updateExportButtonState();
+                setStatus(`保存しました: ${handle.name}  (${_rows.length} 点 / ${label})`);
+                return;
+            } catch (e) {
+                if (e && e.name === 'AbortError') return;
+                console.error(e);
+                // 最後の手段にフォールバック
+            }
+        }
+
+        // 3) フォールバック: 通常のダウンロード (Downloads フォルダへ)
         const blob = new Blob([bytes], { type: mime });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -555,12 +660,15 @@
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
 
-        setStatus(`保存しました: ${name}  (${_rows.length} 点 / ${encType === 'utf8bom' ? 'UTF-8 BOM' : 'Shift-JIS'})`);
+        setStatus(`ダウンロードしました: ${name}  (${_rows.length} 点 / ${label})`);
     }
 
     // ---- ボタン状態 ----
     function updateExportButtonState() {
-        btnExport.disabled = !(_rows.length > 0 && outputName.value.trim().length > 0);
+        const hasData = _rows.length > 0;
+        const hasName = outputName.value.trim().length > 0;
+        btnExport.disabled = !(hasData && hasName);
+        btnBrowse.disabled = !hasData;
     }
 
     function updateEditButtonStates() {
