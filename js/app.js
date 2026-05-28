@@ -374,7 +374,8 @@
         if (pIndexes.length === 0) { alert('P 杭が見つかりません。'); return; }
 
         const sZmm = getSZmm();
-        const result = await window.Dialogs.openAllPilesEdit(pIndexes.length, sZmm);
+        const pZGroups = getPZGroups(pIndexes);
+        const result = await window.Dialogs.openAllPilesEdit(pIndexes.length, sZmm, pZGroups);
         if (result === null) return;
 
         let compute, desc;
@@ -391,6 +392,13 @@
                 compute = (idx) => (_rows[idx].inZ != null ? _rows[idx].inZ : 0) - result.value;
                 desc = `全 ${pIndexes.length} 本の P から S 点 Z (${G.fmt(result.value)} mm) を減算`;
                 break;
+            case 'shiftByGroup': {
+                const delta = result.value - result.sourceZmm;
+                compute = (idx) => (_rows[idx].inZ != null ? _rows[idx].inZ : 0) + delta;
+                const sign = delta >= 0 ? '+' : '';
+                desc = `基準グループ Z=${G.fmt(result.sourceZmm)} → ${G.fmt(result.value)} mm  (差分 ${sign}${G.fmt(delta)} mm を全 ${pIndexes.length} 本に加算)`;
+                break;
+            }
             default:
                 return;
         }

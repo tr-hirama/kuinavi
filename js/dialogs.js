@@ -115,33 +115,70 @@
     }
 
     /* =====================================================
-     * 全 P 杭への一括変更 (Set / AddDelta / SubtractS)
+     * 全 P 杭への一括変更 (Set / AddDelta / SubtractS / ShiftByGroup)
      * @param {number} pCount
      * @param {number|null} sZmm
-     * @returns {Promise<null | {mode:'setAll'|'addDelta'|'subtractS', value:number}>}
+     * @param {Array<{zmm:number,count:number}>} pZGroups
+     * @returns {Promise<null | {mode:'setAll'|'addDelta'|'subtractS'|'shiftByGroup', value:number, sourceZmm?:number}>}
      * ===================================================== */
-    async function openAllPilesEdit(pCount, sZmm) {
+    async function openAllPilesEdit(pCount, sZmm, pZGroups) {
+        pZGroups = pZGroups || [];
+
         const rdSet = el('input', { type: 'radio', name: 'allmode', value: 'setAll', checked: true });
         const rdAdd = el('input', { type: 'radio', name: 'allmode', value: 'addDelta' });
         const rdSubS = el('input', {
             type: 'radio', name: 'allmode', value: 'subtractS',
             disabled: sZmm == null,
         });
+        const rdShift = el('input', {
+            type: 'radio', name: 'allmode', value: 'shiftByGroup',
+            disabled: pZGroups.length === 0,
+        });
 
         const subSLabel = sZmm != null
             ? `S 点の Z (=${sZmm} mm) を全 P から減算  (Z = Z − S_Z)`
             : 'S 点の Z を全 P から減算  (S 点なしのため無効)';
 
+        const cmbGroup = el('select', { class: 'dlg-input mono', disabled: true });
+        for (const g of pZGroups) {
+            const opt = el('option', { value: String(g.zmm) },
+                `Z = ${String(g.zmm).padStart(12)} mm  (${g.count} 本)`);
+            cmbGroup.appendChild(opt);
+        }
+        if (pZGroups.length > 0) cmbGroup.selectedIndex = 0;
+        const lblGroup = el('span', { class: 'dlg-sublabel' }, '基準グループ:');
+
         const lblValue = el('label', { class: 'dlg-label' }, '新しい Z 値 (mm):');
         const txtValue = el('input', { type: 'text', class: 'dlg-input mono', value: '0' });
 
+        // 計算プレビュー (ShiftByGroup モードのみ)
+        const previewBox = el('div', { class: 'dlg-preview' });
+        function updatePreview() {
+            if (!rdShift.checked) { previewBox.textContent = ''; return; }
+            const srcZ = parseFloat(cmbGroup.value);
+            const tgtZ = tryParse(txtValue.value);
+            if (!isFinite(srcZ) || tgtZ === null) {
+                previewBox.textContent = '差分 Δ: —';
+                return;
+            }
+            const delta = tgtZ - srcZ;
+            const sign = delta >= 0 ? '+' : '';
+            previewBox.textContent = `差分 Δ = ${tgtZ} − ${srcZ} = ${sign}${delta} mm  → 全 ${pCount} 本に加算`;
+        }
+
         function updateEnable() {
             txtValue.disabled = rdSubS.checked;
-            lblValue.textContent = rdAdd.checked ? '加算する値 Δ (mm):' : '新しい Z 値 (mm):';
+            cmbGroup.disabled = !rdShift.checked;
+            lblValue.textContent = rdAdd.checked
+                ? '加算する値 Δ (mm):'
+                : (rdShift.checked ? '基準グループの目標 Z (mm):' : '新しい Z 値 (mm):');
+            updatePreview();
         }
-        [rdSet, rdAdd, rdSubS].forEach(r => r.addEventListener('change', updateEnable));
+        [rdSet, rdAdd, rdSubS, rdShift].forEach(r => r.addEventListener('change', updateEnable));
+        cmbGroup.addEventListener('change', updatePreview);
+        txtValue.addEventListener('input', updatePreview);
 
-        const root = el('div', { class: 'dlg-body' },
+        const root = el('div', { class: 'dlg-body wide' },
             el('h3', { class: 'dlg-title' }, 'P 杭の Z — 全本変更'),
             el('div', { class: 'dlg-summary' },
                 `対象: 全 P 杭 (${pCount} 本)`),
@@ -149,9 +186,13 @@
             el('label', { class: 'dlg-radio' }, rdSet, ' 全 P の Z を一律に設定する  (Z = 値)'),
             el('label', { class: 'dlg-radio' }, rdAdd, ' 全 P の Z に加算する  (Z = Z + Δ)'),
             el('label', { class: 'dlg-radio' }, rdSubS, ' ' + subSLabel),
+            el('label', { class: 'dlg-radio' }, rdShift,
+                ' あるグループの Z を目標値に合わせて、その差を全本に適用'),
+            el('div', { class: 'dlg-group' }, lblGroup, cmbGroup),
             el('div', { class: 'dlg-group' }, lblValue, txtValue),
+            previewBox,
             el('p', { class: 'dlg-hint' },
-                '※「設定」モードでは新しい Z 値、「加算」モードでは Δ を mm 単位で入力します。'),
+                '※「設定」=新しい Z 値 / 「加算」=Δ / 「グループ基準シフト」=基準グループの目標値を入力すると、差分が全本に加算されます。'),
             el('div', { class: 'dlg-buttons' },
                 el('button', { type: 'button', class: 'btn', onclick: () => root._close(null) }, 'キャンセル'),
                 el('button', {
@@ -163,6 +204,17 @@
                                 return;
                             }
                             root._close({ mode: 'subtractS', value: sZmm });
+                            return;
+                        }
+                        if (rdShift.checked) {
+                            if (cmbGroup.selectedIndex < 0) {
+                                alert('基準グループを選択してください。');
+                                return;
+                            }
+                            const tgt = tryParse(txtValue.value);
+                            if (tgt === null) { alert(`無効な数値です: ${txtValue.value}`); return; }
+                            const srcZ = parseFloat(cmbGroup.value);
+                            root._close({ mode: 'shiftByGroup', value: tgt, sourceZmm: srcZ });
                             return;
                         }
                         const v = tryParse(txtValue.value);
