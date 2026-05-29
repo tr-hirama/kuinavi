@@ -265,6 +265,100 @@ select {
 }
 
 /* ============================================================
+ *  Design GL bar
+ * ============================================================ */
+.design-gl-bar {
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    border-top: 1px solid #F59E0B;
+    border-bottom: 2px solid #D97706;
+    padding: 10px 18px;
+    position: relative;
+    z-index: 3;
+    box-shadow: 0 2px 4px rgba(217, 119, 6, 0.12);
+}
+.design-gl-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #78350F;
+    flex-wrap: wrap;
+}
+.design-gl-label {
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+}
+.design-gl-formula {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 700;
+    color: #78350F;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+.design-gl-input {
+    width: 100px;
+    padding: 5px 8px;
+    margin: 0 2px;
+    border: 1.5px solid #D97706;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    text-align: right;
+    background: #FFFBEB;
+    color: #78350F;
+    transition: all 0.15s;
+}
+.design-gl-input:focus {
+    outline: none;
+    border-color: #B45309;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35);
+    background: #ffffff;
+}
+.design-gl-input:disabled {
+    background: #F5F5F5;
+    color: #C0C0C0;
+    border-color: #E0E0E0;
+    cursor: not-allowed;
+}
+.design-gl-unit {
+    font-weight: 600;
+    color: #78350F;
+}
+.design-gl-arrow {
+    color: #D97706;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 4px;
+}
+.design-gl-result {
+    color: #78350F;
+    font-weight: 500;
+    font-size: 13px;
+    font-family: var(--font-mono);
+}
+.design-gl-spacer {
+    flex: 1 1 auto;
+}
+.design-gl-bar .btn-primary {
+    background: #D97706;
+    border-color: #B45309;
+    box-shadow: 0 1px 3px rgba(180, 83, 9, 0.4);
+}
+.design-gl-bar .btn-primary:hover:not(:disabled) {
+    background: #B45309;
+    border-color: #92400E;
+    box-shadow: 0 4px 12px rgba(180, 83, 9, 0.4);
+}
+.design-gl-bar .btn-primary:disabled {
+    background: #FCD34D;
+    border-color: #FCD34D;
+    color: #fff;
+}
+
+/* ============================================================
  *  Main layout
  * ============================================================ */
 .main {

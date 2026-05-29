@@ -29,6 +29,9 @@
     const btnHelp = $('btnHelp');
     const btnUndo = $('btnUndo');
     const btnRedo = $('btnRedo');
+    const inputDesignGL = $('inputDesignGL');
+    const btnApplyDesignGL = $('btnApplyDesignGL');
+    const designGLResult = $('designGLResult');
     const encodingSel = $('encoding');
     const gridHeader = $('gridHeader');
     const gridBody = $('gridBody');
@@ -94,6 +97,13 @@
     btnHelp.addEventListener('click', openHelp);
     btnUndo.addEventListener('click', onUndo);
     btnRedo.addEventListener('click', onRedo);
+
+    // 設計GL → BM Z 設定
+    inputDesignGL.addEventListener('input', updateDesignGLPreview);
+    inputDesignGL.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); applyDesignGL(); }
+    });
+    btnApplyDesignGL.addEventListener('click', applyDesignGL);
 
     // キーボードショートカット: Ctrl+Z (undo) / Ctrl+Y / Ctrl+Shift+Z (redo)
     document.addEventListener('keydown', (e) => {
@@ -191,6 +201,7 @@
             _selectedIndex = -1;
             _outputHandle = null;
             _paletteIdx = 0;
+            inputDesignGL.value = '';
             assignInitialColors();
             clearUndoHistory();  // 新規ファイル読込で履歴リセット
 
@@ -223,6 +234,7 @@
         _selectedIndex = -1;
         _outputHandle = null;
         _paletteIdx = 0;
+        inputDesignGL.value = '';
         gridBody.innerHTML = '';
         rawText.value = '';
         outText.value = '';
@@ -910,6 +922,56 @@
             && G.isEditableZPoint(_rows[_selectedIndex].name);
         btnEditSelectedZ.disabled = !selIsEditable;
         btnCoordTransform.disabled = !selIsEditable;
+        // 設計GL バーは BM が存在するときに有効
+        updateDesignGLAvailability();
+    }
+
+    // ---- 設計GL → BM Z 値設定 ----
+    function updateDesignGLAvailability() {
+        const hasBM = _rows.some(r => G.isBMPoint(r.name));
+        inputDesignGL.disabled = !hasBM;
+        btnApplyDesignGL.disabled = !hasBM;
+        if (!hasBM) {
+            designGLResult.textContent = 'CSV を読み込み、BM 水準点があれば有効になります';
+        } else {
+            updateDesignGLPreview();
+        }
+    }
+
+    function updateDesignGLPreview() {
+        const raw = inputDesignGL.value.trim();
+        if (raw === '' || !/^[+\-]?(\d+\.?\d*|\.\d+)([eE][+\-]?\d+)?$/.test(raw)) {
+            designGLResult.textContent = '入力 → 全 BM の Z 値を ‒(入力値) mm に設定';
+            return;
+        }
+        const v = parseFloat(raw);
+        const newZ = -v;
+        const bmCount = _rows.filter(r => G.isBMPoint(r.name)).length;
+        designGLResult.textContent = `→ 全 BM (${bmCount} 点) の Z 値を ${G.fmt(newZ)} mm に設定`;
+    }
+
+    function applyDesignGL() {
+        const raw = inputDesignGL.value.trim();
+        if (raw === '' || !/^[+\-]?(\d+\.?\d*|\.\d+)([eE][+\-]?\d+)?$/.test(raw)) {
+            alert('数値を入力してください。');
+            inputDesignGL.focus();
+            return;
+        }
+        const v = parseFloat(raw);
+        const newZ = -v;
+
+        const bmIndexes = [];
+        for (let i = 0; i < _rows.length; i++) {
+            if (G.isBMPoint(_rows[i].name)) bmIndexes.push(i);
+        }
+        if (bmIndexes.length === 0) {
+            alert('BM 水準点が見つかりません。');
+            return;
+        }
+
+        pushUndo();
+        updateRowsZ(bmIndexes, () => newZ);
+        setStatus(`設計GL = BM[${v}] → 全 BM (${bmIndexes.length} 点) の Z を ${G.fmt(newZ)} mm に設定`);
     }
 
     // ---- ステータスバー ----
@@ -1013,6 +1075,15 @@
                 </tbody>
             </table>
             <p><strong>全本変更</strong>「グループ基準シフト」: あるグループを目標値に合わせるための差分を計算し、全 P に適用します。</p>
+
+            <h3>設計GL バー (黄色バー)</h3>
+            <p>BM 水準点が含まれているとき、画面上部の <strong style="color:#B45309;">設計GL = BM[___] mm</strong> バーが有効になります。</p>
+            <ul>
+                <li>数値（mm）を入力し、Enter キーまたは「BM に設定」ボタン</li>
+                <li>全 BM の Z 値が <strong>−（入力値）</strong> mm に設定されます</li>
+                <li>例: <code>200</code> を入力 → BM の Z = <code>-200</code> mm</li>
+                <li>例: <code>-150</code> を入力 → BM の Z = <code>+150</code> mm</li>
+            </ul>
 
             <h3>4. 座標変換 (選択 P 基準で全点シフト)</h3>
             <ol>
