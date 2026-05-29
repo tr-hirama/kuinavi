@@ -223,6 +223,20 @@
         return typeof name === 'string' && name.length === 1 && (name === 'S' || name === 's');
     }
 
+    /** 先頭が "BM" (大小区別なし) かどうか */
+    function isBMPoint(name) {
+        if (typeof name !== 'string' || name.length < 2) return false;
+        const c0 = name.charCodeAt(0), c1 = name.charCodeAt(1);
+        const isB = c0 === 0x42 || c0 === 0x62;  // 'B' or 'b'
+        const isM = c1 === 0x4D || c1 === 0x6D;  // 'M' or 'm'
+        return isB && isM;
+    }
+
+    /** Z 編集の対象になる点か (P または BM) */
+    function isEditableZPoint(name) {
+        return startsWith(name, 'P') || isBMPoint(name);
+    }
+
     /** "K1", "P12" 等の末尾数字を取り出す。なければ null */
     function tryParsePointNumber(name) {
         if (!name || name.length < 2) return null;
@@ -243,6 +257,8 @@
         fmt,
         startsWith,
         isSPoint,
+        isBMPoint,
+        isEditableZPoint,
         tryParsePointNumber,
     };
 })(window);

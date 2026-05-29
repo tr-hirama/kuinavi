@@ -302,16 +302,16 @@
         tr.dataset.index = String(index);
         tr.addEventListener('click', () => selectRow(index));
 
-        const isP = G.startsWith(p.name, 'P');
+        const isEditable = G.isEditableZPoint(p.name);
 
         tr.appendChild(td('col-name', p.name));
         tr.appendChild(td('col-num', G.fmt(p.inY)));
         tr.appendChild(td('col-num', G.fmt(p.inX)));
 
-        // Z セル (P 杭のみ編集可能)
+        // Z セル (P 杭 / BM 水準点のみ編集可能)
         const zCell = document.createElement('td');
         zCell.className = 'col-num';
-        applyInZCell(zCell, p, isP, index);
+        applyInZCell(zCell, p, isEditable, index);
         tr.appendChild(zCell);
 
         tr.appendChild(td('col-num cell-out', G.fmt(p.outX)));
@@ -331,7 +331,7 @@
         return c;
     }
 
-    function applyInZCell(cell, p, isP, index) {
+    function applyInZCell(cell, p, isEditable, index) {
         cell.classList.remove('cell-z-empty', 'cell-z-editable');
         cell.removeAttribute('contenteditable');
         cell.removeAttribute('title');
@@ -341,17 +341,17 @@
             cell.classList.add('cell-z-empty');
         } else {
             cell.textContent = G.fmt(p.inZ);
-            if (isP) cell.classList.add('cell-z-editable');
+            if (isEditable) cell.classList.add('cell-z-editable');
         }
 
-        if (isP) {
+        if (isEditable) {
             cell.title = 'ダブルクリックで mm 単位で編集';
             cell.addEventListener('dblclick', (e) => {
                 e.stopPropagation();
                 startEditZCell(cell, index);
             });
         } else {
-            cell.title = 'P 杭以外は編集できません';
+            cell.title = 'P 杭 / BM 水準点以外は編集できません';
         }
     }
 
@@ -431,8 +431,8 @@
     async function onEditSelectedZ() {
         if (_selectedIndex < 0 || _selectedIndex >= _rows.length) return;
         const p = _rows[_selectedIndex];
-        if (!G.startsWith(p.name, 'P')) {
-            alert('P 杭の行を選択してください。');
+        if (!G.isEditableZPoint(p.name)) {
+            alert('P 杭または BM 水準点の行を選択してください。');
             return;
         }
         const result = await window.Dialogs.openSingleZEdit(p.name, p.inZ);
@@ -517,12 +517,12 @@
         setStatus(desc);
     }
 
-    // ---- 座標変換 (選択 P 基準で全点シフト) ----
+    // ---- 座標変換 (選択 P / BM 基準で全点シフト) ----
     async function onCoordTransform() {
         if (_selectedIndex < 0 || _selectedIndex >= _rows.length) return;
         const p = _rows[_selectedIndex];
-        if (!G.startsWith(p.name, 'P')) {
-            alert('P 杭の行を選択してください。');
+        if (!G.isEditableZPoint(p.name)) {
+            alert('P 杭または BM 水準点の行を選択してください。');
             return;
         }
         const result = await window.Dialogs.openCoordTransformDialog(p.name, p.outX, p.outY, p.outZ);
@@ -904,11 +904,12 @@
         const hasP = _rows.some(r => G.startsWith(r.name, 'P'));
         btnAllEditZ.disabled = !hasP;
         btnGroupEditZ.disabled = !hasP;
-        const selIsP = _selectedIndex >= 0
+        // 単一 Z 編集 / 座標変換は P または BM が選択中なら有効
+        const selIsEditable = _selectedIndex >= 0
             && _selectedIndex < _rows.length
-            && G.startsWith(_rows[_selectedIndex].name, 'P');
-        btnEditSelectedZ.disabled = !selIsP;
-        btnCoordTransform.disabled = !selIsP;
+            && G.isEditableZPoint(_rows[_selectedIndex].name);
+        btnEditSelectedZ.disabled = !selIsEditable;
+        btnCoordTransform.disabled = !selIsEditable;
     }
 
     // ---- ステータスバー ----
@@ -986,7 +987,7 @@
             <ul>
                 <li>左上のドロップエリアに CSV を<strong>ドラッグ&ドロップ</strong>、または「ファイル選択」ボタン</li>
                 <li>入力形式: <code>名前, Y(mm), X(mm), Z(mm)</code></li>
-                <li>名前の頭文字で種別判定: <code>P</code>=杭 / <code>K</code>=基準点 / <code>H</code>=境界 / <code>S</code>=機器位置</li>
+                <li>名前の頭文字で種別判定: <code>P</code>=杭 / <code>BM</code>=水準点 / <code>K</code>=基準点 / <code>H</code>=境界 / <code>S</code>=機器位置</li>
             </ul>
 
             <h3>2. 配置図の操作</h3>
@@ -1005,8 +1006,8 @@
             <table>
                 <thead><tr><th>方法</th><th>用途</th></tr></thead>
                 <tbody>
-                    <tr><td>グリッドの Z セルを<strong>ダブルクリック</strong></td><td>1 行だけ素早く編集</td></tr>
-                    <tr><td>「選択 P の Z 編集」ボタン</td><td>選択中の P をダイアログで編集</td></tr>
+                    <tr><td>グリッドの Z セルを<strong>ダブルクリック</strong></td><td>P / BM の 1 行を素早く編集</td></tr>
+                    <tr><td>「選択点の Z 編集」ボタン</td><td>選択中の P / BM をダイアログで編集</td></tr>
                     <tr><td>「グループ変更」ボタン</td><td>同じ Z 値の P 群だけ <em>設定</em> / <em>加算</em></td></tr>
                     <tr><td>「全本変更」ボタン</td><td>全 P 対象 (設定 / 加算 / S 減算 / グループ基準シフト)</td></tr>
                 </tbody>

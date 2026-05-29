@@ -18,6 +18,9 @@
         '#786450',  // ブラウン
     ];
 
+    // BM (水準点) 専用色 — 濃紺のダイヤモンドで表示
+    const BM_COLOR = '#0D47A1';
+
     function darken(hex, factor) {
         factor = factor == null ? 0.55 : factor;
         const c = hex.replace('#', '');
@@ -239,6 +242,29 @@
                 ctx.fillText(r.name, p.x + 7, p.y - 12);
             }
 
+            // BM 点 — 濃紺の白抜きダイヤモンド + 名前ラベル
+            const bmRows = rows.filter(r => G.isBMPoint(r.name));
+            if (bmRows.length > 0) {
+                ctx.font = 'bold 11px "Yu Gothic UI", "Yu Gothic", sans-serif';
+                for (const r of bmRows) {
+                    const p = toPx(r.outX, r.outY);
+                    const sz = 7;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.strokeStyle = BM_COLOR;
+                    ctx.lineWidth = 1.8;
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y - sz);
+                    ctx.lineTo(p.x + sz, p.y);
+                    ctx.lineTo(p.x, p.y + sz);
+                    ctx.lineTo(p.x - sz, p.y);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.fillStyle = BM_COLOR;
+                    ctx.fillText(r.name, p.x + 9, p.y - 11);
+                }
+            }
+
             // P 点 — 各行に格納された color フィールドをそのまま使用
             //   (色の割り当ては app.js が管理: 編集モードによって色を保つか変えるか制御)
             const pRows = rows.filter(r => G.startsWith(r.name, 'P'));
@@ -379,6 +405,22 @@
             ctx.strokeRect(x + 2, y + 3, 7, 7);
             ctx.fillStyle = '#000';
             ctx.fillText('H  境界', x + 14, y);
+            y += rowH;
+
+            // BM ダイヤモンド
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = BM_COLOR;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x + 5, y + 2);
+            ctx.lineTo(x + 10, y + 7);
+            ctx.lineTo(x + 5, y + 12);
+            ctx.lineTo(x, y + 7);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#000';
+            ctx.fillText('BM 水準点', x + 14, y);
         }
 
         _onMouseDown(e) {
@@ -454,8 +496,9 @@
             const fit = this._fit, view = this._view, cw = this._cw, ch = this._ch;
 
             // 点の種類ごとの「ヒット半径」(画面ピクセル) と「優先度」
-            //   P 杭: 編集対象 → 最優先 / K 基準点: 次点 / H 境界: 直接クリック時のみ
+            //   P 杭 / BM 水準点: 編集対象 → 最優先 / K 基準点: 次点 / H 境界: 直接クリック時のみ
             function classify(name) {
+                if (G.isBMPoint(name)) return { rank: 3, radius: 11 };
                 if (G.startsWith(name, 'P')) return { rank: 3, radius: 12 };
                 if (G.startsWith(name, 'K')) return { rank: 2, radius: 12 };
                 if (G.startsWith(name, 'H')) return { rank: 1, radius: 6 };
