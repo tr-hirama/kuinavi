@@ -100,6 +100,14 @@
     inputDesignGL.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); applyDesignGL(); }
     });
+    // blur 時に入力値を符号付きフォーマット (+200 / ±0 / -200) に整形
+    inputDesignGL.addEventListener('blur', () => {
+        const v = parseDesignGLInput(inputDesignGL.value);
+        if (v !== null) {
+            inputDesignGL.value = formatDesignGLDisplay(v);
+            updateDesignGLPreview();
+        }
+    });
     btnApplyDesignGL.addEventListener('click', applyDesignGL);
 
     // キーボードショートカット: Ctrl+Z (undo) / Ctrl+Y / Ctrl+Shift+Z (redo)
@@ -926,16 +934,42 @@
 
     // ---- 設計GL → BM Z 値設定 ----
     /**
+     * 入力欄表示用の符号付きフォーマット:
+     *   v > 0  → "+200"
+     *   v == 0 → "±0"
+     *   v < 0  → "-200"
+     */
+    function formatDesignGLDisplay(value) {
+        if (!isFinite(value)) return '';
+        if (value === 0) return '±0';
+        const absStr = Number.isInteger(value)
+            ? String(Math.abs(value))
+            : Math.abs(value).toString().replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+        return value > 0 ? `+${absStr}` : `-${absStr}`;
+    }
+
+    /**
+     * 入力文字列をパース。"+200" / "-200" / "200" / "±0" のいずれも受理。
+     * 不正なら null。
+     */
+    function parseDesignGLInput(raw) {
+        if (raw == null) return null;
+        let s = String(raw).trim();
+        if (s.length === 0) return null;
+        if (s.charAt(0) === '±') s = s.substring(1);  // "±0" → "0"
+        if (!/^[+\-]?(\d+\.?\d*|\.\d+)([eE][+\-]?\d+)?$/.test(s)) return null;
+        const v = parseFloat(s);
+        return isFinite(v) ? v : null;
+    }
+
+    /**
      * S 点の Z 値を「設計GL = BM[___]」入力の初期値として取得。
      * S 点が無い、または Z 値が空の場合は空文字を返す。
      */
     function defaultDesignGLFromS() {
         const sRow = _rows.find(r => G.isSPoint(r.name));
         if (!sRow || sRow.inZ == null) return '';
-        const v = sRow.inZ;
-        // 整数なら整数表記、小数なら trim した文字列で
-        if (Number.isInteger(v)) return String(v);
-        return v.toString().replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+        return formatDesignGLDisplay(sRow.inZ);
     }
 
     function updateDesignGLAvailability() {
@@ -951,18 +985,18 @@
     }
 
     function updateDesignGLPreview() {
-        const raw = inputDesignGL.value.trim();
+        const v = parseDesignGLInput(inputDesignGL.value);
         const hasBM = _rows.some(r => G.isBMPoint(r.name));
-        if (raw === '' || !/^[+\-]?(\d+\.?\d*|\.\d+)([eE][+\-]?\d+)?$/.test(raw)) {
+        if (v === null) {
             designGLResult.textContent = hasBM
                 ? '入力 → 全 BM の Z 値を ‒(入力値) mm に設定'
                 : 'BM 水準点なし — 設計GL の参照値として保持されます';
             return;
         }
-        const v = parseFloat(raw);
         const newZ = -v;
+        const display = formatDesignGLDisplay(v);
         if (!hasBM) {
-            designGLResult.textContent = `BM 水準点なし — 設計GL = BM[${v}] mm として保持 (Z 値設定はスキップ)`;
+            designGLResult.textContent = `BM 水準点なし — 設計GL = BM[${display}] mm として保持 (Z 値設定はスキップ)`;
             return;
         }
         const bmCount = _rows.filter(r => G.isBMPoint(r.name)).length;
@@ -970,14 +1004,14 @@
     }
 
     function applyDesignGL() {
-        const raw = inputDesignGL.value.trim();
-        if (raw === '' || !/^[+\-]?(\d+\.?\d*|\.\d+)([eE][+\-]?\d+)?$/.test(raw)) {
+        const v = parseDesignGLInput(inputDesignGL.value);
+        if (v === null) {
             alert('数値を入力してください。');
             inputDesignGL.focus();
             return;
         }
-        const v = parseFloat(raw);
         const newZ = -v;
+        const display = formatDesignGLDisplay(v);
 
         const bmIndexes = [];
         for (let i = 0; i < _rows.length; i++) {
@@ -985,13 +1019,13 @@
         }
         if (bmIndexes.length === 0) {
             // BM が無くてもエラーにしない — 値はそのまま参照値として残す
-            setStatus(`設計GL = BM[${v}] mm を保持 (BM 水準点が無いため Z 値の設定はスキップ)`);
+            setStatus(`設計GL = BM[${display}] mm を保持 (BM 水準点が無いため Z 値の設定はスキップ)`);
             return;
         }
 
         pushUndo();
         updateRowsZ(bmIndexes, () => newZ);
-        setStatus(`設計GL = BM[${v}] → 全 BM (${bmIndexes.length} 点) の Z を ${G.fmt(newZ)} mm に設定`);
+        setStatus(`設計GL = BM[${display}] → 全 BM (${bmIndexes.length} 点) の Z を ${G.fmt(newZ)} mm に設定`);
     }
 
     // ---- ステータスバー ----
