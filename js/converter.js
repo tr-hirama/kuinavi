@@ -81,33 +81,39 @@
 
     /**
      * 行データから CSV テキストを構築 (出力用)
-     *  - 対象: P 杭のみ
-     *  - 名前: 先頭の "P" (大小区別なし) を除去 (例: P1 → 1)
-     *  - 順序: P 番号の昇順 (数値解釈可能なものを先、不可は末尾)
+     *  - 対象: すべての点 (P / K / H / S)
+     *  - P 点の名前: 先頭の "P" (大小区別なし) を除去 (例: P1 → 1)
+     *  - 順序: P 点を番号昇順で先頭、続いて非 P 点を入力順
      *  - 各行末尾に "," を付加
      */
     function buildCsv(rows) {
-        function stripPrefix(name) {
+        function isP(name) {
+            return /^[Pp]/.test(name || '');
+        }
+        function stripP(name) {
             return String(name || '').replace(/^[Pp]/, '');
         }
         function pNum(name) {
-            const tail = stripPrefix(name);
+            const tail = stripP(name);
             const n = parseInt(tail, 10);
             return isNaN(n) ? Number.POSITIVE_INFINITY : n;
         }
+
+        // P 点を番号昇順、非 P 点は入力順を維持して連結
         const pRows = rows
-            .filter(r => /^[Pp]/.test(r.name || ''))
+            .filter(r => isP(r.name))
             .slice()
             .sort((a, b) => {
                 const na = pNum(a.name), nb = pNum(b.name);
                 if (na !== nb) return na - nb;
-                // 同番号 (異形名) は名前で安定化
                 return String(a.name).localeCompare(String(b.name));
             });
+        const nonPRows = rows.filter(r => !isP(r.name));
+        const ordered = pRows.concat(nonPRows);
 
         const lines = [];
-        for (const p of pRows) {
-            const name = stripPrefix(p.name);
+        for (const p of ordered) {
+            const name = isP(p.name) ? stripP(p.name) : p.name;
             // 末尾に "," を付与 (列の最後を "," で終える)
             lines.push(`${name},${fmt(p.outX)},${fmt(p.outY)},${fmt(p.outZ)},`);
         }
