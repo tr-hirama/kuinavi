@@ -939,11 +939,12 @@
     }
 
     function updateDesignGLAvailability() {
-        const hasBM = _rows.some(r => G.isBMPoint(r.name));
-        inputDesignGL.disabled = !hasBM;
-        btnApplyDesignGL.disabled = !hasBM;
-        if (!hasBM) {
-            designGLResult.textContent = 'CSV を読み込み、BM 水準点があれば有効になります';
+        const hasData = _rows.length > 0;
+        // BM の有無に関わらず、データがあれば入力欄・ボタン共に有効化
+        inputDesignGL.disabled = !hasData;
+        btnApplyDesignGL.disabled = !hasData;
+        if (!hasData) {
+            designGLResult.textContent = 'CSV を読み込むと有効になります';
         } else {
             updateDesignGLPreview();
         }
@@ -951,12 +952,19 @@
 
     function updateDesignGLPreview() {
         const raw = inputDesignGL.value.trim();
+        const hasBM = _rows.some(r => G.isBMPoint(r.name));
         if (raw === '' || !/^[+\-]?(\d+\.?\d*|\.\d+)([eE][+\-]?\d+)?$/.test(raw)) {
-            designGLResult.textContent = '入力 → 全 BM の Z 値を ‒(入力値) mm に設定';
+            designGLResult.textContent = hasBM
+                ? '入力 → 全 BM の Z 値を ‒(入力値) mm に設定'
+                : 'BM 水準点なし — 設計GL の参照値として保持されます';
             return;
         }
         const v = parseFloat(raw);
         const newZ = -v;
+        if (!hasBM) {
+            designGLResult.textContent = `BM 水準点なし — 設計GL = BM[${v}] mm として保持 (Z 値設定はスキップ)`;
+            return;
+        }
         const bmCount = _rows.filter(r => G.isBMPoint(r.name)).length;
         designGLResult.textContent = `→ 全 BM (${bmCount} 点) の Z 値を ${G.fmt(newZ)} mm に設定`;
     }
@@ -976,7 +984,8 @@
             if (G.isBMPoint(_rows[i].name)) bmIndexes.push(i);
         }
         if (bmIndexes.length === 0) {
-            alert('BM 水準点が見つかりません。');
+            // BM が無くてもエラーにしない — 値はそのまま参照値として残す
+            setStatus(`設計GL = BM[${v}] mm を保持 (BM 水準点が無いため Z 値の設定はスキップ)`);
             return;
         }
 
