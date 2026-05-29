@@ -22,6 +22,7 @@
     const btnEditSelectedZ = $('btnEditSelectedZ');
     const btnGroupEditZ = $('btnGroupEditZ');
     const btnAllEditZ = $('btnAllEditZ');
+    const btnCoordTransform = $('btnCoordTransform');
     const encodingSel = $('encoding');
     const gridHeader = $('gridHeader');
     const gridBody = $('gridBody');
@@ -78,6 +79,7 @@
     btnEditSelectedZ.addEventListener('click', onEditSelectedZ);
     btnGroupEditZ.addEventListener('click', onGroupEditZ);
     btnAllEditZ.addEventListener('click', onAllEditZ);
+    btnCoordTransform.addEventListener('click', onCoordTransform);
 
     dropzone.addEventListener('click', onSelectFile);
     ['dragenter', 'dragover'].forEach(ev => {
@@ -467,6 +469,70 @@
         setStatus(desc);
     }
 
+    // ---- 座標変換 (選択 P 基準で全点シフト) ----
+    async function onCoordTransform() {
+        if (_selectedIndex < 0 || _selectedIndex >= _rows.length) return;
+        const p = _rows[_selectedIndex];
+        if (!G.startsWith(p.name, 'P')) {
+            alert('P 杭の行を選択してください。');
+            return;
+        }
+        const result = await window.Dialogs.openCoordTransformDialog(p.name, p.outX, p.outY, p.outZ);
+        if (result === null) return;
+
+        const dx = result.outX - p.outX;
+        const dy = result.outY - p.outY;
+        const dz = result.outZ - p.outZ;
+
+        if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9 && Math.abs(dz) < 1e-9) {
+            setStatus('変化なし: 座標は変更されませんでした');
+            return;
+        }
+
+        shiftAllCoords(dx, dy, dz);
+
+        const sign = (v) => (v >= 0 ? '+' : '');
+        setStatus(
+            `座標変換: 基準 ${p.name}  ` +
+            `ΔX=${sign(dx)}${G.fmt(dx)} / ` +
+            `ΔY=${sign(dy)}${G.fmt(dy)} / ` +
+            `ΔZ=${sign(dz)}${G.fmt(dz)} m を全 ${_rows.length} 点に適用`
+        );
+    }
+
+    /**
+     * 全点の出力 (X, Y, Z) に同じ delta を加算する。
+     * 入力 (inX, inY, inZ mm) も整合性を保つよう連動更新する。
+     * 色は保持 (全点が同じ方向に平行移動するため意味的に変わらない)。
+     */
+    function shiftAllCoords(dx, dy, dz) {
+        const dxMm = dx * 1000.0;
+        const dyMm = dy * 1000.0;
+        const dzMm = dz * 1000.0;
+        for (let i = 0; i < _rows.length; i++) {
+            const r = _rows[i];
+            const newInZ = (r.inZ != null) ? (r.inZ + dzMm) : null;
+            _rows[i] = Object.assign({}, r, {
+                inX: r.inX + dxMm,
+                inY: r.inY + dyMm,
+                inZ: newInZ,
+                outX: r.outX + dx,
+                outY: r.outY + dy,
+                outZ: r.outZ + dz,
+            });
+            refreshRow(i);
+        }
+        // 選択ハイライトを保持
+        if (_selectedIndex >= 0) {
+            const tr = gridBody.querySelector(`tr[data-index="${_selectedIndex}"]`);
+            if (tr) tr.classList.add('selected');
+        }
+        plot.setData(_rows);
+        plot.setSelectedIndex(_selectedIndex);
+        updatePlotTabTitle();
+        populateOutputText();
+    }
+
     async function onGroupEditZ() {
         if (_rows.length === 0) return;
         const pIndexes = collectPIndexes();
@@ -705,6 +771,7 @@
             && _selectedIndex < _rows.length
             && G.startsWith(_rows[_selectedIndex].name, 'P');
         btnEditSelectedZ.disabled = !selIsP;
+        btnCoordTransform.disabled = !selIsP;
     }
 
     // ---- ステータスバー ----

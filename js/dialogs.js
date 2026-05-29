@@ -293,9 +293,69 @@
         return await showModal(root);
     }
 
+    /* =====================================================
+     * 座標変換: 選択 P の X / Y / Z (m) を表示し、差分を全点に適用
+     * @param {string} pointName
+     * @param {number} curX, curY, curZ  (m 単位)
+     * @returns {Promise<null | {outX:number, outY:number, outZ:number}>}
+     * ===================================================== */
+    async function openCoordTransformDialog(pointName, curX, curY, curZ) {
+        const fmt3 = (v) => Number(v).toFixed(3);
+        const txtX = el('input', { type: 'text', class: 'dlg-input mono', value: fmt3(curX) });
+        const txtY = el('input', { type: 'text', class: 'dlg-input mono', value: fmt3(curY) });
+        const txtZ = el('input', { type: 'text', class: 'dlg-input mono', value: fmt3(curZ) });
+
+        const previewBox = el('div', { class: 'dlg-preview' });
+        function updatePreview() {
+            const nx = tryParse(txtX.value);
+            const ny = tryParse(txtY.value);
+            const nz = tryParse(txtZ.value);
+            if (nx === null || ny === null || nz === null) {
+                previewBox.textContent = '差分 Δ: —';
+                return;
+            }
+            const dx = nx - curX, dy = ny - curY, dz = nz - curZ;
+            const s = (v) => (v >= 0 ? '+' : '') + v.toFixed(3);
+            previewBox.textContent = `ΔX = ${s(dx)} / ΔY = ${s(dy)} / ΔZ = ${s(dz)} m  → 全点に加算`;
+        }
+        [txtX, txtY, txtZ].forEach(t => t.addEventListener('input', updatePreview));
+
+        const root = el('div', { class: 'dlg-body wide' },
+            el('h3', { class: 'dlg-title' }, `座標変換 — 基準点 ${pointName}`),
+            el('div', { class: 'dlg-summary' },
+                `${pointName} の現在座標を表示しています。値を変更すると差分が全点 (P / K / H / S) に加算されます。`),
+            el('div', { class: 'dlg-section' }, '新しい座標 (m)'),
+            el('div', { class: 'dlg-group' }, el('label', { class: 'dlg-label' }, 'X (m):'), txtX),
+            el('div', { class: 'dlg-group' }, el('label', { class: 'dlg-label' }, 'Y (m):'), txtY),
+            el('div', { class: 'dlg-group' }, el('label', { class: 'dlg-label' }, 'Z (m):'), txtZ),
+            previewBox,
+            el('p', { class: 'dlg-hint' },
+                '※ 各座標の差分 (新 − 旧) を計算し、すべての点 (P / K / H / S) に加算します。'),
+            el('div', { class: 'dlg-buttons' },
+                el('button', { type: 'button', class: 'btn', onclick: () => root._close(null) }, 'キャンセル'),
+                el('button', {
+                    type: 'button', class: 'btn btn-primary',
+                    onclick: () => {
+                        const nx = tryParse(txtX.value);
+                        const ny = tryParse(txtY.value);
+                        const nz = tryParse(txtZ.value);
+                        if (nx === null) { alert(`X が無効です: ${txtX.value}`); return; }
+                        if (ny === null) { alert(`Y が無効です: ${txtY.value}`); return; }
+                        if (nz === null) { alert(`Z が無効です: ${txtZ.value}`); return; }
+                        root._close({ outX: nx, outY: ny, outZ: nz });
+                    },
+                }, 'OK'),
+            ),
+        );
+
+        updatePreview();
+        return await showModal(root);
+    }
+
     global.Dialogs = {
         openSingleZEdit,
         openAllPilesEdit,
         openGroupPilesEdit,
+        openCoordTransformDialog,
     };
 })(window);
