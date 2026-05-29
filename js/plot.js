@@ -350,8 +350,12 @@
             // クリップ解除
             ctx.restore();
 
-            // 凡例 (クリップ外)
-            this._drawLegend(ctx, cssW - marginR + 10, marginT, legendEntries);
+            // 凡例 (クリップ外) — 実際にデータが含まれる種別だけ表示
+            const hasK = rows.some(r => G.startsWith(r.name, 'K'));
+            const hasH = rows.some(r => G.startsWith(r.name, 'H'));
+            const hasBM = bmRows.length > 0;
+            this._drawLegend(ctx, cssW - marginR + 10, marginT, legendEntries,
+                { hasK, hasH, hasBM });
 
             // 倍率表示 (クリップ外)
             ctx.fillStyle = '#696969';
@@ -376,7 +380,7 @@
             ctx.textBaseline = 'alphabetic';
         }
 
-        _drawLegend(ctx, x, y, legendEntries) {
+        _drawLegend(ctx, x, y, legendEntries, opts) {
             ctx.textBaseline = 'top';
             const rowH = 18;
             ctx.fillStyle = '#000';
@@ -415,52 +419,62 @@
                 }
             }
 
-            y += 6;
-            ctx.fillStyle = '#000';
-            ctx.font = 'bold 11px "Yu Gothic UI", "Yu Gothic", sans-serif';
-            ctx.fillText('[ その他 ]', x - 4, y);
-            y += rowH;
+            // 「その他」セクション — 実在する種別のみ表示
+            const showSection = opts && (opts.hasK || opts.hasH || opts.hasBM);
+            if (showSection) {
+                y += 6;
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 11px "Yu Gothic UI", "Yu Gothic", sans-serif';
+                ctx.fillText('[ その他 ]', x - 4, y);
+                y += rowH;
+                ctx.font = '11.5px "Yu Gothic UI", "Yu Gothic", sans-serif';
+            }
 
-            // K 三角
-            ctx.strokeStyle = '#B22222';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(x + 5, y + 1);
-            ctx.lineTo(x, y + 11);
-            ctx.lineTo(x + 10, y + 11);
-            ctx.closePath();
-            ctx.stroke();
-            ctx.fillStyle = '#000';
-            ctx.font = '11.5px "Yu Gothic UI", "Yu Gothic", sans-serif';
-            ctx.fillText('K  基準点', x + 14, y);
-            y += rowH;
+            if (opts && opts.hasK) {
+                // K 三角
+                ctx.strokeStyle = '#B22222';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(x + 5, y + 1);
+                ctx.lineTo(x, y + 11);
+                ctx.lineTo(x + 10, y + 11);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.fillStyle = '#000';
+                ctx.fillText('K  基準点', x + 14, y);
+                y += rowH;
+            }
 
-            // H 四角
-            ctx.strokeStyle = '#228B22';
-            ctx.lineWidth = 1.2;
-            ctx.strokeRect(x + 2, y + 3, 7, 7);
-            ctx.fillStyle = '#000';
-            ctx.fillText('H  境界', x + 14, y);
-            y += rowH;
+            if (opts && opts.hasH) {
+                // H 四角
+                ctx.strokeStyle = '#228B22';
+                ctx.lineWidth = 1.2;
+                ctx.strokeRect(x + 2, y + 3, 7, 7);
+                ctx.fillStyle = '#000';
+                ctx.fillText('H  境界', x + 14, y);
+                y += rowH;
+            }
 
-            // BM 塗りつぶしダイヤモンド + 中央白ドット (本体と統一)
-            ctx.fillStyle = BM_COLOR;
-            ctx.strokeStyle = darken(BM_COLOR, 0.7);
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(x + 5, y + 2);
-            ctx.lineTo(x + 10, y + 7);
-            ctx.lineTo(x + 5, y + 12);
-            ctx.lineTo(x, y + 7);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(x + 5, y + 7, 1.5, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#000';
-            ctx.fillText('BM 水準点', x + 14, y);
+            if (opts && opts.hasBM) {
+                // BM 塗りつぶしダイヤモンド + 中央白ドット (本体と統一)
+                ctx.fillStyle = BM_COLOR;
+                ctx.strokeStyle = darken(BM_COLOR, 0.7);
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(x + 5, y + 2);
+                ctx.lineTo(x + 10, y + 7);
+                ctx.lineTo(x + 5, y + 12);
+                ctx.lineTo(x, y + 7);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(x + 5, y + 7, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.fillText('BM 水準点', x + 14, y);
+            }
         }
 
         _onMouseDown(e) {
