@@ -15,7 +15,7 @@
     const $ = (id) => document.getElementById(id);
 
     // アプリのバージョン (ツールバーバッジとヘルプモーダルで表示)
-    const APP_VERSION = 'v1.0';
+    const APP_VERSION = 'v0.0';
 
     // ---- DOM 参照 ----
     const dropzone = $('dropzone');

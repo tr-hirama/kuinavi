@@ -124,15 +124,21 @@
     async function openAllPilesEdit(pCount, sZmm, pZGroups) {
         pZGroups = pZGroups || [];
 
-        const rdSet = el('input', { type: 'radio', name: 'allmode', value: 'setAll', checked: true });
+        // shiftByGroup を既定モードに (グループが存在する場合)
+        const canShift = pZGroups.length > 0;
+        const rdShift = el('input', {
+            type: 'radio', name: 'allmode', value: 'shiftByGroup',
+            disabled: !canShift,
+            checked: canShift,
+        });
+        const rdSet = el('input', {
+            type: 'radio', name: 'allmode', value: 'setAll',
+            checked: !canShift,
+        });
         const rdAdd = el('input', { type: 'radio', name: 'allmode', value: 'addDelta' });
         const rdSubS = el('input', {
             type: 'radio', name: 'allmode', value: 'subtractS',
             disabled: sZmm == null,
-        });
-        const rdShift = el('input', {
-            type: 'radio', name: 'allmode', value: 'shiftByGroup',
-            disabled: pZGroups.length === 0,
         });
 
         const subSLabel = sZmm != null
@@ -183,16 +189,16 @@
             el('div', { class: 'dlg-summary' },
                 `対象: 全 P 杭 (${pCount} 本)`),
             el('div', { class: 'dlg-section' }, '操作モード'),
-            el('label', { class: 'dlg-radio' }, rdSet, ' 全 P の Z を一律に設定する  (Z = 値)'),
-            el('label', { class: 'dlg-radio' }, rdAdd, ' 全 P の Z に加算する  (Z = Z + Δ)'),
-            el('label', { class: 'dlg-radio' }, rdSubS, ' ' + subSLabel),
             el('label', { class: 'dlg-radio' }, rdShift,
                 ' あるグループの Z を目標値に合わせて、その差を全本に適用'),
             el('div', { class: 'dlg-group' }, lblGroup, cmbGroup),
+            el('label', { class: 'dlg-radio' }, rdSet, ' 全 P の Z を一律に設定する  (Z = 値)'),
+            el('label', { class: 'dlg-radio' }, rdAdd, ' 全 P の Z に加算する  (Z = Z + Δ)'),
+            el('label', { class: 'dlg-radio' }, rdSubS, ' ' + subSLabel),
             el('div', { class: 'dlg-group' }, lblValue, txtValue),
             previewBox,
             el('p', { class: 'dlg-hint' },
-                '※「設定」=新しい Z 値 / 「加算」=Δ / 「グループ基準シフト」=基準グループの目標値を入力すると、差分が全本に加算されます。'),
+                '※「グループ基準シフト」=基準グループの目標値を入力 / 「設定」=新しい Z 値 / 「加算」=Δ を mm 単位で入力します。'),
             el('div', { class: 'dlg-buttons' },
                 el('button', { type: 'button', class: 'btn', onclick: () => root._close(null) }, 'キャンセル'),
                 el('button', {
