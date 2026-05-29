@@ -1,12 +1,13 @@
 /*
  * 杭ナビ → GL.csv 変換ツール (Web) のメイン制御
  *
- * 原本 MainForm.cs のロジックを移植:
+ * 原本 MainForm.cs のロジックを移植 + Web 独自機能:
  *  - D&D / ファイル選択
- *  - グリッド表示 / 行選択 / Z セル直接編集
- *  - 配置図 / 生データのタブ切替
- *  - Z 単一・一括編集
- *  - エンコーディング選択して保存
+ *  - グリッド表示 (読み込んだ CSV) / 行選択 / Z セル直接編集
+ *  - 配置図 / 出力 CSV のタブ切替
+ *  - Z 単一 / グループ / 全本編集、座標変換、設計GL→BM
+ *  - Undo / Redo
+ *  - エンコーディング選択して保存 (File System Access API)
  */
 (function () {
     'use strict';
@@ -38,18 +39,13 @@
     const outText = $('outText');
     const outInfo = $('outInfo');
     const btnCopyOut = $('btnCopyOut');
-    const tabPlot = $('tabPlot');
-    const tabOut = $('tabOut');
-    const tabPlotText = $('tabPlotText');
-    const panePlot = $('panePlot');
-    const paneOut = $('paneOut');
+    const tabPlotText = $('tabPlotText');  // 配置図タブのラベル (点数表示で更新)
     const statusbar = $('statusbar');
     const splitter = $('splitter');
     const canvas = $('plotCanvas');
 
     // ---- 状態 ----
     let _rows = [];                 // 現在のデータ
-    let _rawText = '';              // 読み込んだ生テキスト
     let _inputFileName = null;      // 入力ファイル名
     let _selectedIndex = -1;        // 選択行 index
     let _editedZ = new Set();       // Z 値が編集された行 index (緑強調用)
@@ -200,7 +196,6 @@
             const text = await G.readFileSmart(file);
             const rows = G.parseAndConvert(text);
             _rows = rows;
-            _rawText = text;
             _inputFileName = file.name;
             _editedZ = new Set();
             _selectedIndex = -1;
@@ -212,7 +207,6 @@
             clearUndoHistory();  // 新規ファイル読込で履歴リセット
 
             populateGrid();
-            populateRawText();
             populateOutputText();
             updateGridHeader();
             updatePlotTabTitle();
@@ -247,7 +241,6 @@
     function onClear() {
         if (_rows.length > 0) pushUndo();  // データがあれば取消可能に
         _rows = [];
-        _rawText = '';
         _inputFileName = null;
         _editedZ = new Set();
         _selectedIndex = -1;
@@ -266,9 +259,6 @@
         updateEditButtonStates();
         setStatus('クリアしました');
     }
-
-    // 生データ表示タブは廃止 (グリッドが「読み込んだ CSV」を表示)
-    function populateRawText() { /* no-op */ }
 
     function populateOutputText() {
         const csv = G.buildCsv(_rows);
@@ -726,7 +716,13 @@
             newZs.set(idx, compute(idx));
         }
         // 色を割り当て (preserveColor=true なら何もしない)
-        const newColors = preserveColor ? null : resolveNewColors(Array.from(newZs.keys()), newZs);
+        //   色は P 杭にのみ意味を持つため、対象を P 杭に絞る。
+        //   (BM 等の編集で resolveNewColors を呼ぶと _paletteIdx が無駄に進み、
+        //    その後の新規 P グループの色が 1 つ飛ぶ問題を防ぐ)
+        const pIndexesToColor = preserveColor
+            ? []
+            : Array.from(newZs.keys()).filter(i => G.startsWith(_rows[i].name, 'P'));
+        const newColors = preserveColor ? null : resolveNewColors(pIndexesToColor, newZs);
 
         for (const idx of newZs.keys()) {
             const newZ = newZs.get(idx);
@@ -855,7 +851,6 @@
             suggestedName: _suggestedName,
             outputHandle: _outputHandle,
             inputFileName: _inputFileName,
-            rawText: _rawText,
         };
     }
 
@@ -867,10 +862,8 @@
         _suggestedName = s.suggestedName;
         _outputHandle = s.outputHandle;
         _inputFileName = s.inputFileName;
-        _rawText = s.rawText;
 
         populateGrid();
-        populateRawText();
         populateOutputText();
         updateGridHeader();
         updatePlotTabTitle();
@@ -1122,7 +1115,7 @@
                 <tbody>
                     <tr><td><span class="kbd">ホイール</span></td><td>カーソル位置を中心にズーム</td></tr>
                     <tr><td><span class="kbd">ドラッグ</span></td><td>パン (掴んで動かす)</td></tr>
-                    <tr><td><span class="kbd">クリック</span></td><td>最寄り点を選択 (優先度: P &gt; K &gt; H)</td></tr>
+                    <tr><td><span class="kbd">クリック</span></td><td>最寄り点を選択 (優先度: P / BM &gt; K &gt; H)</td></tr>
                     <tr><td><span class="kbd">ダブルクリック</span></td><td>ズーム/パンをリセット</td></tr>
                 </tbody>
             </table>
@@ -1141,12 +1134,15 @@
             <p><strong>全本変更</strong>「グループ基準シフト」: あるグループを目標値に合わせるための差分を計算し、全 P に適用します。</p>
 
             <h3>設計GL バー (黄色バー)</h3>
-            <p>BM 水準点が含まれているとき、画面上部の <strong style="color:#B45309;">設計GL = BM[___] mm</strong> バーが有効になります。</p>
+            <p>CSV を読み込むと <strong style="color:#B45309;">設計GL = BM[___] mm</strong> バーが有効になります。S 点があれば、その Z 値が初期値として自動入力されます。</p>
             <ul>
                 <li>数値（mm）を入力し、Enter キーまたは「BM に設定」ボタン</li>
-                <li>全 BM の Z 値が <strong>−（入力値）</strong> mm に設定されます</li>
+                <li>BM 水準点があれば、全 BM の Z 値が <strong>−（入力値）</strong> mm に設定されます</li>
                 <li>例: <code>200</code> を入力 → BM の Z = <code>-200</code> mm</li>
                 <li>例: <code>-150</code> を入力 → BM の Z = <code>+150</code> mm</li>
+                <li>表示は符号付き（正は <code>+200</code>、ゼロは <code>±0</code>）</li>
+                <li>S 点と BM が両方あると、読込時に自動で BM に反映されます（Ctrl+Z で取消可）</li>
+                <li>BM が無い場合は値を参照値として保持するのみ（Z 設定はスキップ）</li>
             </ul>
 
             <h3>4. 座標変換 (選択 P 基準で全点シフト)</h3>

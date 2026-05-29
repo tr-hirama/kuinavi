@@ -1,8 +1,9 @@
 /*
- * Z 値編集ダイアログ
- *  - openSingleZEdit : 単一 P 杭の Z (mm) を入力
- *  - openAllPilesEdit: 全 P 杭への一括変更 (Set / AddDelta / SubtractS)
- *  - openGroupPilesEdit: 同じ Z 値の P 杭群に対する変更 (Set / AddDelta)
+ * 各種編集ダイアログ
+ *  - openSingleZEdit       : 単一 P / BM の Z (mm) を入力
+ *  - openAllPilesEdit      : 全 P 杭への一括変更 (ShiftByGroup / Set / AddDelta / SubtractS)
+ *  - openGroupPilesEdit    : 同じ Z 値の P 杭群に対する変更 (Set / AddDelta)
+ *  - openCoordTransformDialog: 選択点を基準に全点を平行移動
  *
  * Promise ベースで結果を返す。キャンセル時は null。
  */
