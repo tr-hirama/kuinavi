@@ -1106,7 +1106,7 @@
             <ul>
                 <li>左上のドロップエリアに CSV を<strong>ドラッグ&ドロップ</strong>、または「ファイル選択」ボタン</li>
                 <li>入力形式: <code>名前, Y(mm), X(mm), Z(mm)</code></li>
-                <li>名前の頭文字で種別判定: <code>P</code>=杭 / <code>BM</code>=水準点 / <code>K</code>=基準点 / <code>H</code>=境界 / <code>S</code>=機器位置</li>
+                <li>名前の頭文字で種別判定: <code>P</code>=杭 / <code>BM</code>=水準点 / <code>K</code>=境界 / <code>S</code>=機器位置 (<code>H</code> は配置図に非表示)</li>
             </ul>
 
             <h3>2. 配置図の操作</h3>
@@ -1115,7 +1115,7 @@
                 <tbody>
                     <tr><td><span class="kbd">ホイール</span></td><td>カーソル位置を中心にズーム</td></tr>
                     <tr><td><span class="kbd">ドラッグ</span></td><td>パン (掴んで動かす)</td></tr>
-                    <tr><td><span class="kbd">クリック</span></td><td>最寄り点を選択 (優先度: P / BM &gt; K &gt; H)</td></tr>
+                    <tr><td><span class="kbd">クリック</span></td><td>最寄り点を選択 (優先度: P / BM &gt; K)</td></tr>
                     <tr><td><span class="kbd">ダブルクリック</span></td><td>ズーム/パンをリセット</td></tr>
                 </tbody>
             </table>

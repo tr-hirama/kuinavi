@@ -96,7 +96,8 @@
             }
 
             const G = global.GlConverter;
-            const bboxRows = rows.filter(r => !G.isSPoint(r.name));
+            // S 点と H 点は配置図に描画しないので、範囲計算からも除外する
+            const bboxRows = rows.filter(r => !G.isSPoint(r.name) && !G.startsWith(r.name, 'H'));
             if (bboxRows.length === 0) {
                 this._drawCenteredMessage(ctx, cssW, cssH, '描画対象の点がありません');
                 return;
@@ -179,29 +180,9 @@
             ctx.fillText(`X=${minX.toFixed(2)}`, pBL.x - 38, pBL.y - 14);
             ctx.fillText(`X=${maxX.toFixed(2)}`, pTL.x - 38, pTL.y - 14);
 
-            // H 点 (境界 — 緑の小四角 + 折れ線)
-            const hRows = rows.filter(r => G.startsWith(r.name, 'H'));
-            ctx.strokeStyle = 'rgba(60,160,60,0.78)';
-            ctx.lineWidth = 1.2;
-            for (const r of hRows) {
-                const p = toPx(r.outX, r.outY);
-                ctx.strokeRect(p.x - 3, p.y - 3, 6, 6);
-            }
-            if (hRows.length >= 2) {
-                ctx.strokeStyle = 'rgba(60,160,60,0.5)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                const first = toPx(hRows[0].outX, hRows[0].outY);
-                ctx.moveTo(first.x, first.y);
-                for (let i = 1; i < hRows.length; i++) {
-                    const p = toPx(hRows[i].outX, hRows[i].outY);
-                    ctx.lineTo(p.x, p.y);
-                }
-                ctx.closePath();
-                ctx.stroke();
-            }
+            // H 点 (境界) は描画しない (要望により非表示)
 
-            // K 点 (基準点) を番号順にソート
+            // K 点 (境界) を番号順にソート
             const kSorted = rows
                 .filter(r => G.startsWith(r.name, 'K'))
                 .map(r => ({ row: r, num: G.tryParsePointNumber(r.name) }))
@@ -334,9 +315,10 @@
                 }))
                 .sort((a, b) => b.zs[0] - a.zs[0]);
 
-            // 選択行のハイライト
+            // 選択行のハイライト (S / H は描画対象外なのでハイライトもしない)
             if (this.selectedIndex >= 0 && this.selectedIndex < rows.length
-                && !G.isSPoint(rows[this.selectedIndex].name)) {
+                && !G.isSPoint(rows[this.selectedIndex].name)
+                && !G.startsWith(rows[this.selectedIndex].name, 'H')) {
                 const sel = rows[this.selectedIndex];
                 const hp = toPx(sel.outX, sel.outY);
                 ctx.strokeStyle = '#FF4500';
@@ -350,12 +332,11 @@
             // クリップ解除
             ctx.restore();
 
-            // 凡例 (クリップ外) — データに実在する種別のみ表示
+            // 凡例 (クリップ外) — データに実在する種別のみ表示 (H は非表示)
             const hasK = rows.some(r => G.startsWith(r.name, 'K'));
-            const hasH = rows.some(r => G.startsWith(r.name, 'H'));
             const hasBM = bmRows.length > 0;
             this._drawLegend(ctx, cssW - marginR + 10, marginT, legendEntries,
-                { hasK, hasH, hasBM });
+                { hasK, hasBM });
 
             // 倍率表示 (クリップ外)
             ctx.fillStyle = '#696969';
@@ -419,8 +400,8 @@
                 }
             }
 
-            // 「その他」セクション — 実在する種別 (K / H / BM) のみ表示
-            const showSection = opts && (opts.hasK || opts.hasH || opts.hasBM);
+            // 「その他」セクション — 実在する種別 (K / BM) のみ表示
+            const showSection = opts && (opts.hasK || opts.hasBM);
             if (showSection) {
                 y += 6;
                 ctx.fillStyle = '#000';
@@ -431,7 +412,7 @@
             }
 
             if (opts && opts.hasK) {
-                // K 三角 (基準点)
+                // K 三角 (境界)
                 ctx.strokeStyle = '#B22222';
                 ctx.lineWidth = 1.5;
                 ctx.beginPath();
@@ -441,17 +422,7 @@
                 ctx.closePath();
                 ctx.stroke();
                 ctx.fillStyle = '#000';
-                ctx.fillText('K  基準点', x + 14, y);
-                y += rowH;
-            }
-
-            if (opts && opts.hasH) {
-                // H 四角 (境界)
-                ctx.strokeStyle = '#228B22';
-                ctx.lineWidth = 1.2;
-                ctx.strokeRect(x + 2, y + 3, 7, 7);
-                ctx.fillStyle = '#000';
-                ctx.fillText('H  境界', x + 14, y);
+                ctx.fillText('K  境界', x + 14, y);
                 y += rowH;
             }
 
@@ -550,19 +521,19 @@
             const fit = this._fit, view = this._view, cw = this._cw, ch = this._ch;
 
             // 点の種類ごとの「ヒット半径」(画面ピクセル) と「優先度」
-            //   P 杭 / BM 水準点: 編集対象 → 最優先 / K 基準点: 次点 / H 境界: 直接クリック時のみ
+            //   P 杭 / BM 水準点: 編集対象 → 最優先 / K 境界: 次点
+            //   (S 点・H 点は配置図に描画しないので選択対象外)
             function classify(name) {
                 if (G.isBMPoint(name)) return { rank: 3, radius: 14 };
                 if (G.startsWith(name, 'P')) return { rank: 3, radius: 12 };
                 if (G.startsWith(name, 'K')) return { rank: 2, radius: 12 };
-                if (G.startsWith(name, 'H')) return { rank: 1, radius: 6 };
                 return { rank: 0, radius: 8 };
             }
 
             const candidates = [];
             for (let i = 0; i < this.rows.length; i++) {
                 const r = this.rows[i];
-                if (G.isSPoint(r.name)) continue;
+                if (G.isSPoint(r.name) || G.startsWith(r.name, 'H')) continue;
                 // world → canvas(fit) → screen(view)
                 const canvasX = fit.offX + (r.outY - fit.minY) * fit.scale;
                 const canvasY = fit.offY + (fit.maxX - r.outX) * fit.scale;
