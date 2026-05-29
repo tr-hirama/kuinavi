@@ -577,7 +577,16 @@
         const pZGroups = getPZGroups(pIndexes);
         if (pZGroups.length === 0) { alert('Z 値のグループが見つかりません。'); return; }
 
-        const result = await window.Dialogs.openGroupPilesEdit(pZGroups);
+        // 現在選択中の P があれば、そのグループを既定値に
+        let defaultZmm = null;
+        if (_selectedIndex >= 0 && _selectedIndex < _rows.length) {
+            const sel = _rows[_selectedIndex];
+            if (G.startsWith(sel.name, 'P')) {
+                defaultZmm = sel.inZ != null ? sel.inZ : 0;
+            }
+        }
+
+        const result = await window.Dialogs.openGroupPilesEdit(pZGroups, defaultZmm);
         if (result === null) return;
 
         const srcKey = Math.round(result.sourceZmm * 1e6) / 1e6;

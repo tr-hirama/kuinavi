@@ -232,16 +232,25 @@
     /* =====================================================
      * 同じ Z 値の P 杭グループに対する変更 (Set / AddDelta)
      * @param {Array<{zmm:number,count:number}>} pZGroups
+     * @param {number|null} defaultZmm  既定で選択する Z 値 (mm) — 通常は選択中 P の Z
      * @returns {Promise<null | {mode:'setGroup'|'addGroup', value:number, sourceZmm:number}>}
      * ===================================================== */
-    async function openGroupPilesEdit(pZGroups) {
+    async function openGroupPilesEdit(pZGroups, defaultZmm) {
         const cmbGroup = el('select', { class: 'dlg-input mono' });
-        for (const g of pZGroups) {
+        const defaultKey = defaultZmm != null
+            ? Math.round(defaultZmm * 1e6) / 1e6
+            : null;
+        let defaultIdx = 0;
+        for (let i = 0; i < pZGroups.length; i++) {
+            const g = pZGroups[i];
             const opt = el('option', { value: String(g.zmm) },
                 `Z = ${String(g.zmm).padStart(12)} mm  (${g.count} 本)`);
             cmbGroup.appendChild(opt);
+            if (defaultKey !== null && Math.round(g.zmm * 1e6) / 1e6 === defaultKey) {
+                defaultIdx = i;
+            }
         }
-        if (pZGroups.length > 0) cmbGroup.selectedIndex = 0;
+        if (pZGroups.length > 0) cmbGroup.selectedIndex = defaultIdx;
 
         const rdSet = el('input', { type: 'radio', name: 'grpmode', value: 'setGroup', checked: true });
         const rdAdd = el('input', { type: 'radio', name: 'grpmode', value: 'addGroup' });
