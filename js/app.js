@@ -24,6 +24,8 @@
     const btnAllEditZ = $('btnAllEditZ');
     const btnCoordTransform = $('btnCoordTransform');
     const btnHelp = $('btnHelp');
+    const btnUndo = $('btnUndo');
+    const btnRedo = $('btnRedo');
     const encodingSel = $('encoding');
     const gridHeader = $('gridHeader');
     const gridBody = $('gridBody');
@@ -51,6 +53,11 @@
     let _outputHandle = null;       // File System Access API のファイルハンドル
     let _suggestedName = '';        // 出力ファイル名 (入力CSV名から自動生成)
     let _paletteIdx = 0;            // 次に割り当てるパレット index
+
+    // ---- Undo / Redo 履歴 ----
+    let _undoStack = [];
+    let _redoStack = [];
+    const MAX_UNDO = 50;
 
     // P 杭の Z 値ごとの色パレット (本数の多い順に割当)
     //   #1 水色 / #2 薄緑 / #3 朱色 / 以降 黄土・紫・ティール・ピンク・ブラウン
@@ -82,6 +89,27 @@
     btnAllEditZ.addEventListener('click', onAllEditZ);
     btnCoordTransform.addEventListener('click', onCoordTransform);
     btnHelp.addEventListener('click', openHelp);
+    btnUndo.addEventListener('click', onUndo);
+    btnRedo.addEventListener('click', onRedo);
+
+    // キーボードショートカット: Ctrl+Z (undo) / Ctrl+Y / Ctrl+Shift+Z (redo)
+    document.addEventListener('keydown', (e) => {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        const active = document.activeElement;
+        if (active && (
+            active.tagName === 'INPUT' ||
+            active.tagName === 'TEXTAREA' ||
+            active.isContentEditable
+        )) return; // テキスト編集中はネイティブ undo を優先
+        const k = (e.key || '').toLowerCase();
+        if (k === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            onUndo();
+        } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
+            e.preventDefault();
+            onRedo();
+        }
+    });
 
     dropzone.addEventListener('click', onSelectFile);
     ['dragenter', 'dragover'].forEach(ev => {
@@ -161,6 +189,7 @@
             _outputHandle = null;
             _paletteIdx = 0;
             assignInitialColors();
+            clearUndoHistory();  // 新規ファイル読込で履歴リセット
 
             populateGrid();
             populateRawText();
@@ -183,6 +212,7 @@
     }
 
     function onClear() {
+        if (_rows.length > 0) pushUndo();  // データがあれば取消可能に
         _rows = [];
         _rawText = '';
         _inputFileName = null;
@@ -358,6 +388,7 @@
                 refreshRow(index);
                 return;
             }
+            pushUndo();
             updateRowsZ([index], () => newZ);
             setStatus(`${p.name} の Z を ${G.fmt(newZ)} mm に変更しました`);
         };
@@ -403,6 +434,7 @@
         }
         const result = await window.Dialogs.openSingleZEdit(p.name, p.inZ);
         if (result === null) return;
+        pushUndo();
         updateRowsZ([_selectedIndex], () => result);
         setStatus(`${p.name} の Z を ${G.fmt(result)} mm に変更しました`);
     }
@@ -467,6 +499,7 @@
                 return;
         }
 
+        pushUndo();
         updateRowsZ(pIndexes, compute, { preserveColor: true });
         setStatus(desc);
     }
@@ -491,6 +524,7 @@
             return;
         }
 
+        pushUndo();
         shiftAllCoords(dx, dy, dz);
 
         const sign = (v) => (v >= 0 ? '+' : '');
@@ -565,6 +599,7 @@
             desc = `${targetIndexes.length} 本の P (Z=${G.fmt(result.sourceZmm)} mm) に Z+=${G.fmt(result.value)} mm を加算`;
         }
 
+        pushUndo();
         updateRowsZ(targetIndexes, compute);
         setStatus(desc);
     }
@@ -760,6 +795,84 @@
         setStatus(`ダウンロードしました: ${name}  (${_rows.length} 点 / ${label})`);
     }
 
+    // ---- Undo / Redo ----
+    function captureState() {
+        return {
+            rows: _rows.map(r => Object.assign({}, r)),
+            editedZ: new Set(_editedZ),
+            selectedIndex: _selectedIndex,
+            paletteIdx: _paletteIdx,
+            suggestedName: _suggestedName,
+            outputHandle: _outputHandle,
+            inputFileName: _inputFileName,
+            rawText: _rawText,
+        };
+    }
+
+    function applyState(s) {
+        _rows = s.rows.map(r => Object.assign({}, r));
+        _editedZ = new Set(s.editedZ);
+        _selectedIndex = s.selectedIndex;
+        _paletteIdx = s.paletteIdx;
+        _suggestedName = s.suggestedName;
+        _outputHandle = s.outputHandle;
+        _inputFileName = s.inputFileName;
+        _rawText = s.rawText;
+
+        populateGrid();
+        populateRawText();
+        populateOutputText();
+        updateGridHeader();
+        updatePlotTabTitle();
+        plot.setData(_rows);
+        plot.setSelectedIndex(_selectedIndex);
+        // グリッド選択ハイライトを復元
+        if (_selectedIndex >= 0) {
+            const tr = gridBody.querySelector(`tr[data-index="${_selectedIndex}"]`);
+            if (tr) {
+                tr.classList.add('selected');
+                try { tr.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_) {}
+            }
+        }
+        updateExportButtonState();
+        updateEditButtonStates();
+        updateUndoRedoButtons();
+    }
+
+    function pushUndo() {
+        _undoStack.push(captureState());
+        _redoStack = [];
+        if (_undoStack.length > MAX_UNDO) _undoStack.shift();
+        updateUndoRedoButtons();
+    }
+
+    function onUndo() {
+        if (_undoStack.length === 0) return;
+        _redoStack.push(captureState());
+        const prev = _undoStack.pop();
+        applyState(prev);
+        setStatus(`元に戻しました  (undo: ${_undoStack.length} / redo: ${_redoStack.length})`);
+    }
+
+    function onRedo() {
+        if (_redoStack.length === 0) return;
+        _undoStack.push(captureState());
+        const next = _redoStack.pop();
+        applyState(next);
+        setStatus(`やり直しました  (undo: ${_undoStack.length} / redo: ${_redoStack.length})`);
+    }
+
+    function clearUndoHistory() {
+        _undoStack = [];
+        _redoStack = [];
+        updateUndoRedoButtons();
+    }
+
+    function updateUndoRedoButtons() {
+        btnUndo.disabled = _undoStack.length === 0;
+        btnRedo.disabled = _redoStack.length === 0;
+    }
+
     // ---- ボタン状態 ----
     function updateExportButtonState() {
         btnExport.disabled = !(_rows.length > 0);
@@ -894,9 +1007,19 @@
             </ul>
             <p>出力形式: <code>1,10.500,10.300,5.000,</code> のように <strong>P 名前は先頭の P を除去</strong>、行末は <code>,</code> で終わります。並びは P 番号昇順を先頭に、その後 K / H / S が入力順で続きます。</p>
 
+            <h3>取り消し / やり直し (Undo / Redo)</h3>
+            <table>
+                <thead><tr><th>操作</th><th>ショートカット</th></tr></thead>
+                <tbody>
+                    <tr><td>元に戻す</td><td><span class="kbd">Ctrl+Z</span> または ↶ ボタン</td></tr>
+                    <tr><td>やり直し</td><td><span class="kbd">Ctrl+Y</span> / <span class="kbd">Ctrl+Shift+Z</span> または ↷ ボタン</td></tr>
+                </tbody>
+            </table>
+            <p>Z 編集 / グループ変更 / 全本変更 / 座標変換 / クリアの直前の状態を最大 50 件まで保持します。新規ファイル読込で履歴はリセットされます。</p>
+
             <h3>その他</h3>
             <ul>
-                <li>「クリア」ボタンで全データ削除</li>
+                <li>「クリア」ボタンで全データ削除（Ctrl+Z で復元可能）</li>
                 <li>編集された Z セルはグリッド上で<strong>緑色</strong>に強調</li>
                 <li>推奨ブラウザ: Chrome / Edge (ネイティブ保存ダイアログ対応)</li>
                 <li>詳細マニュアル: <a href="https://github.com/tr-hirama/kuinavi/blob/main/MANUAL.md" target="_blank" rel="noopener">GitHub の MANUAL.md</a></li>
