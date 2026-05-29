@@ -474,7 +474,17 @@
 
         const sZmm = getSZmm();
         const pZGroups = getPZGroups(pIndexes);
-        const result = await window.Dialogs.openAllPilesEdit(pIndexes.length, sZmm, pZGroups);
+
+        // 現在選択中の P があれば、そのグループを基準グループの既定値に
+        let defaultZmm = null;
+        if (_selectedIndex >= 0 && _selectedIndex < _rows.length) {
+            const sel = _rows[_selectedIndex];
+            if (G.startsWith(sel.name, 'P')) {
+                defaultZmm = sel.inZ != null ? sel.inZ : 0;
+            }
+        }
+
+        const result = await window.Dialogs.openAllPilesEdit(pIndexes.length, sZmm, pZGroups, defaultZmm);
         if (result === null) return;
 
         let compute, desc;

@@ -119,9 +119,10 @@
      * @param {number} pCount
      * @param {number|null} sZmm
      * @param {Array<{zmm:number,count:number}>} pZGroups
+     * @param {number|null} defaultZmm  基準グループの既定値 (通常は選択中 P の Z)
      * @returns {Promise<null | {mode:'setAll'|'addDelta'|'subtractS'|'shiftByGroup', value:number, sourceZmm?:number}>}
      * ===================================================== */
-    async function openAllPilesEdit(pCount, sZmm, pZGroups) {
+    async function openAllPilesEdit(pCount, sZmm, pZGroups, defaultZmm) {
         pZGroups = pZGroups || [];
 
         // shiftByGroup を既定モードに (グループが存在する場合)
@@ -146,12 +147,20 @@
             : 'S 点の Z を全 P から減算  (S 点なしのため無効)';
 
         const cmbGroup = el('select', { class: 'dlg-input mono', disabled: true });
-        for (const g of pZGroups) {
+        const defaultKey = defaultZmm != null
+            ? Math.round(defaultZmm * 1e6) / 1e6
+            : null;
+        let defaultIdx = 0;
+        for (let i = 0; i < pZGroups.length; i++) {
+            const g = pZGroups[i];
             const opt = el('option', { value: String(g.zmm) },
                 `Z = ${String(g.zmm).padStart(12)} mm  (${g.count} 本)`);
             cmbGroup.appendChild(opt);
+            if (defaultKey !== null && Math.round(g.zmm * 1e6) / 1e6 === defaultKey) {
+                defaultIdx = i;
+            }
         }
-        if (pZGroups.length > 0) cmbGroup.selectedIndex = 0;
+        if (pZGroups.length > 0) cmbGroup.selectedIndex = defaultIdx;
         const lblGroup = el('span', { class: 'dlg-sublabel' }, '基準グループ:');
 
         const lblValue = el('label', { class: 'dlg-label' }, '新しい Z 値 (mm):');
