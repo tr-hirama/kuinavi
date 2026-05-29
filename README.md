@@ -1,4 +1,4 @@
-# ハイム杭ナビ変換 (Web 版)
+# ハウス杭ナビ変換 (Web 版)
 
 杭ナビ CSV (mm 単位) を GL.csv (m 単位) に変換する Web アプリ。
 元の `KuiNaviToGL` (Windows Forms / .NET 8) を完全に Web 移植したもの。

@@ -1095,7 +1095,7 @@
 
     const HELP_HTML = `
         <div class="help-header">
-            <h2>ハイム杭ナビ変換 — 使い方</h2>
+            <h2>ハウス杭ナビ変換 — 使い方</h2>
             <span class="help-subtitle">${APP_VERSION} · 簡易マニュアル</span>
         </div>
         <div class="help-body">
