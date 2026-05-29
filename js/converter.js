@@ -81,13 +81,36 @@
 
     /**
      * 行データから CSV テキストを構築 (出力用)
+     *  - 対象: P 杭のみ
+     *  - 名前: 先頭の "P" (大小区別なし) を除去 (例: P1 → 1)
+     *  - 順序: P 番号の昇順 (数値解釈可能なものを先、不可は末尾)
+     *  - 各行末尾に "," を付加
      */
     function buildCsv(rows) {
-        const lines = [];
-        for (const p of rows) {
-            lines.push(`${p.name},${fmt(p.outX)},${fmt(p.outY)},${fmt(p.outZ)}`);
+        function stripPrefix(name) {
+            return String(name || '').replace(/^[Pp]/, '');
         }
-        // 元コードは行末に '\n' (LF) を付ける
+        function pNum(name) {
+            const tail = stripPrefix(name);
+            const n = parseInt(tail, 10);
+            return isNaN(n) ? Number.POSITIVE_INFINITY : n;
+        }
+        const pRows = rows
+            .filter(r => /^[Pp]/.test(r.name || ''))
+            .slice()
+            .sort((a, b) => {
+                const na = pNum(a.name), nb = pNum(b.name);
+                if (na !== nb) return na - nb;
+                // 同番号 (異形名) は名前で安定化
+                return String(a.name).localeCompare(String(b.name));
+            });
+
+        const lines = [];
+        for (const p of pRows) {
+            const name = stripPrefix(p.name);
+            // 末尾に "," を付与 (列の最後を "," で終える)
+            lines.push(`${name},${fmt(p.outX)},${fmt(p.outY)},${fmt(p.outZ)},`);
+        }
         return lines.join('\n') + (lines.length > 0 ? '\n' : '');
     }
 
