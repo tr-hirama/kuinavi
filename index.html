@@ -57,6 +57,11 @@
             <circle cx="12" cy="12" r="6"/>
             <circle cx="12" cy="12" r="2" fill="currentColor"/>
         </symbol>
+        <symbol id="i-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </symbol>
         <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7"/>
             <rect x="14" y="3" width="7" height="7"/>
@@ -132,6 +137,9 @@
                 </button>
                 <button id="btnCoordTransform" class="btn" disabled title="選択した P 杭を基準に全点を平行移動">
                     <svg><use href="#i-target"/></svg>座標変換
+                </button>
+                <button id="btnHelp" class="btn btn-ghost" title="使い方を表示">
+                    <svg><use href="#i-help"/></svg>ヘルプ
                 </button>
             </div>
         </div>

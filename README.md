@@ -1,10 +1,19 @@
-# 杭ナビ → GL.csv 変換ツール (Web 版)
+# ハイム杭ナビ変換 (Web 版)
 
-`D:\Claude\KuiNaviToGL` (Windows Forms / .NET 8) の Web アプリ移植版。
-元のソリューションには **一切変更を加えず**、本フォルダに独立した形で実装。
+杭ナビ CSV (mm 単位) を GL.csv (m 単位) に変換する Web アプリ。
+元の `KuiNaviToGL` (Windows Forms / .NET 8) を完全に Web 移植したもの。
 
-## 起動方法
+## 公開URL
+**https://tr-hirama.github.io/kuinavi/**
 
+GitHub Actions による自動デプロイ運用中。
+`main` ブランチへ push されると自動で公開されます。
+
+## 使い方
+詳細は [MANUAL.md](MANUAL.md) を参照。
+アプリ右上の「ヘルプ」ボタンからも簡易マニュアルを開けます。
+
+## 起動方法 (ローカル)
 `index.html` をダブルクリックしてブラウザで開くだけ。
 ビルドもサーバーも不要・完全オフライン動作。
 

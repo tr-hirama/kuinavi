@@ -23,6 +23,7 @@
     const btnGroupEditZ = $('btnGroupEditZ');
     const btnAllEditZ = $('btnAllEditZ');
     const btnCoordTransform = $('btnCoordTransform');
+    const btnHelp = $('btnHelp');
     const encodingSel = $('encoding');
     const gridHeader = $('gridHeader');
     const gridBody = $('gridBody');
@@ -80,6 +81,7 @@
     btnGroupEditZ.addEventListener('click', onGroupEditZ);
     btnAllEditZ.addEventListener('click', onAllEditZ);
     btnCoordTransform.addEventListener('click', onCoordTransform);
+    btnHelp.addEventListener('click', openHelp);
 
     dropzone.addEventListener('click', onSelectFile);
     ['dragenter', 'dragover'].forEach(ev => {
@@ -817,6 +819,93 @@
             plot.resize();
         });
     }
+
+    // ---- ヘルプモーダル ----
+    function openHelp() {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop';
+
+        const dlg = document.createElement('div');
+        dlg.className = 'modal-dialog help-dialog';
+        dlg.innerHTML = HELP_HTML;
+        backdrop.appendChild(dlg);
+        document.body.appendChild(backdrop);
+
+        function close() {
+            document.body.removeChild(backdrop);
+            document.removeEventListener('keydown', onKey);
+        }
+        function onKey(e) { if (e.key === 'Escape') close(); }
+        document.addEventListener('keydown', onKey);
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+        dlg.querySelector('[data-close]').addEventListener('click', close);
+    }
+
+    const HELP_HTML = `
+        <div class="help-header">
+            <h2>ハイム杭ナビ変換 — 使い方</h2>
+            <span class="help-subtitle">v1 · 簡易マニュアル</span>
+        </div>
+        <div class="help-body">
+            <h3>1. ファイルを読み込む</h3>
+            <ul>
+                <li>左上のドロップエリアに CSV を<strong>ドラッグ&ドロップ</strong>、または「ファイル選択」ボタン</li>
+                <li>入力形式: <code>名前, Y(mm), X(mm), Z(mm)</code></li>
+                <li>名前の頭文字で種別判定: <code>P</code>=杭 / <code>K</code>=基準点 / <code>H</code>=境界 / <code>S</code>=機器位置</li>
+            </ul>
+
+            <h3>2. 配置図の操作</h3>
+            <table>
+                <thead><tr><th>操作</th><th>動作</th></tr></thead>
+                <tbody>
+                    <tr><td><span class="kbd">ホイール</span></td><td>カーソル位置を中心にズーム</td></tr>
+                    <tr><td><span class="kbd">ドラッグ</span></td><td>パン (掴んで動かす)</td></tr>
+                    <tr><td><span class="kbd">クリック</span></td><td>最寄り点を選択 (優先度: P &gt; K &gt; H)</td></tr>
+                    <tr><td><span class="kbd">ダブルクリック</span></td><td>ズーム/パンをリセット</td></tr>
+                </tbody>
+            </table>
+            <p>P 杭は本数の多い Z グループから順に <strong>水色 → 薄緑 → 朱色</strong> で色分けされます。</p>
+
+            <h3>3. P 杭の Z 値を編集する</h3>
+            <table>
+                <thead><tr><th>方法</th><th>用途</th></tr></thead>
+                <tbody>
+                    <tr><td>グリッドの Z セルを<strong>ダブルクリック</strong></td><td>1 行だけ素早く編集</td></tr>
+                    <tr><td>「選択 P の Z 編集」ボタン</td><td>選択中の P をダイアログで編集</td></tr>
+                    <tr><td>「グループ変更」ボタン</td><td>同じ Z 値の P 群だけ <em>設定</em> / <em>加算</em></td></tr>
+                    <tr><td>「全本変更」ボタン</td><td>全 P 対象 (設定 / 加算 / S 減算 / グループ基準シフト)</td></tr>
+                </tbody>
+            </table>
+            <p><strong>全本変更</strong>「グループ基準シフト」: あるグループを目標値に合わせるための差分を計算し、全 P に適用します。</p>
+
+            <h3>4. 座標変換 (選択 P 基準で全点シフト)</h3>
+            <ol>
+                <li>P 杭を選択</li>
+                <li>「座標変換」ボタン → 現在の X / Y / Z (m) が表示</li>
+                <li>目標値を入力 → OK で差分を全点 (P / K / H / S) に加算</li>
+            </ol>
+            <p>例: P1 を実測したら本来 <code>(10.500, 12.300, 5.200)</code> m だった → ダイアログに入力 → 全点が同じだけシフト。</p>
+
+            <h3>5. 結果を保存する</h3>
+            <ul>
+                <li>「GL.csv を保存」ボタン → 初回はネイティブ保存ダイアログ、2 回目以降は同じ場所へ上書き</li>
+                <li>エンコーディング: <code>Shift-JIS</code>（既存ツール互換）/ <code>UTF-8 (BOM)</code>（Excel 文字化けなし）</li>
+                <li>「出力 CSV」タブで保存前にプレビュー / クリップボードコピー可能</li>
+            </ul>
+            <p>出力形式: <code>1,10.500,10.300,5.000,</code> のように <strong>P 名前は先頭の P を除去</strong>、行末は <code>,</code> で終わります。並びは P 番号昇順を先頭に、その後 K / H / S が入力順で続きます。</p>
+
+            <h3>その他</h3>
+            <ul>
+                <li>「クリア」ボタンで全データ削除</li>
+                <li>編集された Z セルはグリッド上で<strong>緑色</strong>に強調</li>
+                <li>推奨ブラウザ: Chrome / Edge (ネイティブ保存ダイアログ対応)</li>
+                <li>詳細マニュアル: <a href="https://github.com/tr-hirama/kuinavi/blob/main/MANUAL.md" target="_blank" rel="noopener">GitHub の MANUAL.md</a></li>
+            </ul>
+        </div>
+        <div class="help-footer">
+            <button class="btn btn-primary" data-close>閉じる</button>
+        </div>
+    `;
 
     // 初期表示メッセージ
     setStatus('CSV ファイルを読み込んでください。');
