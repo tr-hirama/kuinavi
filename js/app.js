@@ -223,10 +223,20 @@
             updateExportButtonState();
             updateEditButtonStates();
 
-            const designGLNote = inputDesignGL.value
-                ? ` / 設計GL 初期値: BM[${inputDesignGL.value}] mm (S 点の Z 値)`
-                : '';
-            setStatus(`読み込み完了: ${file.name} (${rows.length} 点)${designGLNote}`);
+            // S 点 + BM 点の両方があれば、設計GL 値を自動で BM の Z に反映
+            // (Ctrl+Z で適用前の状態に戻せます)
+            const hasBM = _rows.some(r => G.isBMPoint(r.name));
+            const hasDesignGL = inputDesignGL.value !== '';
+            if (hasBM && hasDesignGL) {
+                applyDesignGL();  // pushUndo + 全 BM の Z 更新 + ステータス設定
+                // applyDesignGL のメッセージにファイル名を付加
+                statusbar.textContent = `読み込み完了: ${file.name} (${rows.length} 点) — ${statusbar.textContent}`;
+            } else {
+                const designGLNote = inputDesignGL.value
+                    ? ` / 設計GL 初期値: BM[${inputDesignGL.value}] mm (S 点の Z 値、BM 無しのため未適用)`
+                    : '';
+                setStatus(`読み込み完了: ${file.name} (${rows.length} 点)${designGLNote}`);
+            }
         } catch (err) {
             console.error(err);
             alert(`${file && file.name}\n${err && err.message || err}`);
