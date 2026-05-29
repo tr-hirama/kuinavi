@@ -112,10 +112,26 @@ svg { width: 14px; height: 14px; flex-shrink: 0; fill: none; }
     flex-direction: column;
     line-height: 1.1;
 }
+.toolbar .brand-text .brand-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
 .toolbar .brand-text .name {
     font-weight: 700;
     font-size: 13.5px;
     color: var(--text);
+}
+.toolbar .brand-text .brand-version {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--primary);
+    background: var(--primary-soft);
+    padding: 1px 7px;
+    border-radius: 999px;
+    letter-spacing: 0.03em;
+    line-height: 1.4;
+    border: 1px solid rgba(79, 70, 229, 0.18);
 }
 .toolbar .brand-text .tag {
     font-size: 10.5px;

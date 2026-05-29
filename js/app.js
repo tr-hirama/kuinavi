@@ -14,6 +14,9 @@
     const G = window.GlConverter;
     const $ = (id) => document.getElementById(id);
 
+    // アプリのバージョン (ツールバーバッジとヘルプモーダルで表示)
+    const APP_VERSION = 'v1.0';
+
     // ---- DOM 参照 ----
     const dropzone = $('dropzone');
     const btnSelect = $('btnSelect');
@@ -966,7 +969,7 @@
     const HELP_HTML = `
         <div class="help-header">
             <h2>ハイム杭ナビ変換 — 使い方</h2>
-            <span class="help-subtitle">v1 · 簡易マニュアル</span>
+            <span class="help-subtitle">${APP_VERSION} · 簡易マニュアル</span>
         </div>
         <div class="help-body">
             <h3>1. ファイルを読み込む</h3>
@@ -1038,6 +1041,10 @@
             <button class="btn btn-primary" data-close>閉じる</button>
         </div>
     `;
+
+    // バージョン表示の初期化 (HTML 内のプレースホルダを上書き)
+    const versionEl = $('appVersion');
+    if (versionEl) versionEl.textContent = APP_VERSION;
 
     // 初期表示メッセージ
     setStatus('CSV ファイルを読み込んでください。');
