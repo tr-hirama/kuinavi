@@ -198,7 +198,8 @@
             _selectedIndex = -1;
             _outputHandle = null;
             _paletteIdx = 0;
-            inputDesignGL.value = '';
+            // 設計GL の初期値: S 点の Z 値があればそれをセット (BM の基準値として)
+            inputDesignGL.value = defaultDesignGLFromS();
             assignInitialColors();
             clearUndoHistory();  // 新規ファイル読込で履歴リセット
 
@@ -214,7 +215,10 @@
             updateExportButtonState();
             updateEditButtonStates();
 
-            setStatus(`読み込み完了: ${file.name} (${rows.length} 点) — 出力ファイル名を確認し「GL.csv を保存」を押してください`);
+            const designGLNote = inputDesignGL.value
+                ? ` / 設計GL 初期値: BM[${inputDesignGL.value}] mm (S 点の Z 値)`
+                : '';
+            setStatus(`読み込み完了: ${file.name} (${rows.length} 点)${designGLNote}`);
         } catch (err) {
             console.error(err);
             alert(`${file && file.name}\n${err && err.message || err}`);
@@ -921,6 +925,19 @@
     }
 
     // ---- 設計GL → BM Z 値設定 ----
+    /**
+     * S 点の Z 値を「設計GL = BM[___]」入力の初期値として取得。
+     * S 点が無い、または Z 値が空の場合は空文字を返す。
+     */
+    function defaultDesignGLFromS() {
+        const sRow = _rows.find(r => G.isSPoint(r.name));
+        if (!sRow || sRow.inZ == null) return '';
+        const v = sRow.inZ;
+        // 整数なら整数表記、小数なら trim した文字列で
+        if (Number.isInteger(v)) return String(v);
+        return v.toString().replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+    }
+
     function updateDesignGLAvailability() {
         const hasBM = _rows.some(r => G.isBMPoint(r.name));
         inputDesignGL.disabled = !hasBM;
