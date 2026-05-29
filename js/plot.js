@@ -350,10 +350,12 @@
             // クリップ解除
             ctx.restore();
 
-            // 凡例 (クリップ外) — P 杭の Z 別色分け + BM のみ (K/H の凡例は不要)
+            // 凡例 (クリップ外) — データに実在する種別のみ表示
+            const hasK = rows.some(r => G.startsWith(r.name, 'K'));
+            const hasH = rows.some(r => G.startsWith(r.name, 'H'));
             const hasBM = bmRows.length > 0;
             this._drawLegend(ctx, cssW - marginR + 10, marginT, legendEntries,
-                { hasBM });
+                { hasK, hasH, hasBM });
 
             // 倍率表示 (クリップ外)
             ctx.fillStyle = '#696969';
@@ -417,15 +419,43 @@
                 }
             }
 
-            // 「その他」セクション — BM のみ表示 (K 基準点 / H 境界 の凡例は不要)
-            if (opts && opts.hasBM) {
+            // 「その他」セクション — 実在する種別 (K / H / BM) のみ表示
+            const showSection = opts && (opts.hasK || opts.hasH || opts.hasBM);
+            if (showSection) {
                 y += 6;
                 ctx.fillStyle = '#000';
                 ctx.font = 'bold 11px "Yu Gothic UI", "Yu Gothic", sans-serif';
                 ctx.fillText('[ その他 ]', x - 4, y);
                 y += rowH;
                 ctx.font = '11.5px "Yu Gothic UI", "Yu Gothic", sans-serif';
+            }
 
+            if (opts && opts.hasK) {
+                // K 三角 (基準点)
+                ctx.strokeStyle = '#B22222';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(x + 5, y + 1);
+                ctx.lineTo(x, y + 11);
+                ctx.lineTo(x + 10, y + 11);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.fillStyle = '#000';
+                ctx.fillText('K  基準点', x + 14, y);
+                y += rowH;
+            }
+
+            if (opts && opts.hasH) {
+                // H 四角 (境界)
+                ctx.strokeStyle = '#228B22';
+                ctx.lineWidth = 1.2;
+                ctx.strokeRect(x + 2, y + 3, 7, 7);
+                ctx.fillStyle = '#000';
+                ctx.fillText('H  境界', x + 14, y);
+                y += rowH;
+            }
+
+            if (opts && opts.hasBM) {
                 // BM 塗りつぶしダイヤモンド + 中央白ドット (本体と統一)
                 ctx.fillStyle = BM_COLOR;
                 ctx.strokeStyle = darken(BM_COLOR, 0.7);
