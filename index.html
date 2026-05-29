@@ -161,84 +161,90 @@
             </div>
         </div>
 
-        <!-- ===== 設計GL バー ===== -->
-        <div class="design-gl-bar">
-            <div class="design-gl-content">
-                <span class="design-gl-label">設計GL =</span>
-                <span class="design-gl-formula">BM[<input id="inputDesignGL" type="text" class="design-gl-input" placeholder="0" disabled>]</span>
-                <span class="design-gl-unit">mm</span>
-                <span class="design-gl-arrow">→</span>
-                <span id="designGLResult" class="design-gl-result">CSV を読み込み、BM 水準点があれば有効になります</span>
-                <span class="design-gl-spacer"></span>
-                <button id="btnApplyDesignGL" class="btn btn-primary" disabled>BM に設定</button>
-            </div>
-        </div>
-
-        <!-- ===== メイン ===== -->
+        <!-- ===== メイン (2x2 レイアウト) ===== -->
         <div class="main">
-            <!-- 左ペイン: グリッド -->
-            <div class="panel-grid">
-                <div id="dropzone" class="dropzone">
-                    <div class="dz-icon"><svg><use href="#i-upload"/></svg></div>
-                    <div class="dz-text">
-                        <strong>CSV ファイルをここにドラッグ&amp;ドロップ</strong>
-                        <span class="dz-sub">または「ファイル選択」ボタンから選択</span>
+            <!-- 左列 -->
+            <div class="col col-left">
+                <!-- 左上: ドロップゾーン -->
+                <div class="quad quad-dropzone">
+                    <div id="dropzone" class="dropzone">
+                        <div class="dz-icon"><svg><use href="#i-upload"/></svg></div>
+                        <div class="dz-text">
+                            <strong>CSV ファイルをここにドラッグ&amp;ドロップ</strong>
+                            <span class="dz-sub">または「ファイル選択」ボタンから選択</span>
+                        </div>
                     </div>
                 </div>
-                <div class="section-header">
-                    <svg><use href="#i-grid"/></svg>
-                    <span id="gridHeader">読み込み待ち</span>
-                </div>
-                <div class="grid-wrap">
-                    <table class="data-grid" id="dataGrid">
-                        <thead>
-                            <tr>
-                                <th style="width:14%;">名前</th>
-                                <th style="width:14%;">入力 Y (mm)</th>
-                                <th style="width:14%;">入力 X (mm)</th>
-                                <th style="width:14%;">入力 Z (mm)</th>
-                                <th style="width:14%;">出力 X (m)</th>
-                                <th style="width:14%;">出力 Y (m)</th>
-                                <th style="width:14%;">出力 Z (m)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="gridBody"></tbody>
-                    </table>
+
+                <!-- 左下: 読み込んだ CSV (グリッド) -->
+                <div class="quad quad-grow panel-grid">
+                    <div class="section-header">
+                        <svg><use href="#i-grid"/></svg>
+                        <span id="gridHeader">読み込んだ CSV — 読み込み待ち</span>
+                    </div>
+                    <div class="grid-wrap">
+                        <table class="data-grid" id="dataGrid">
+                            <thead>
+                                <tr>
+                                    <th style="width:14%;">名前</th>
+                                    <th style="width:14%;">入力 Y (mm)</th>
+                                    <th style="width:14%;">入力 X (mm)</th>
+                                    <th style="width:14%;">入力 Z (mm)</th>
+                                    <th style="width:14%;">出力 X (m)</th>
+                                    <th style="width:14%;">出力 Y (m)</th>
+                                    <th style="width:14%;">出力 Z (m)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="gridBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
-            <!-- スプリッタ -->
+            <!-- スプリッタ (列間) -->
             <div class="splitter" id="splitter"></div>
 
-            <!-- 右ペイン: タブ (配置図 / 生データ) -->
-            <div class="panel-preview">
-                <div class="tabs">
-                    <div class="tab active" data-pane="panePlot" id="tabPlot">
-                        <svg><use href="#i-map"/></svg><span id="tabPlotText">配置図 (P 杭)</span>
-                    </div>
-                    <div class="tab" data-pane="paneOut" id="tabOut">
-                        <svg><use href="#i-file-out"/></svg><span id="tabOutText">出力 CSV</span>
-                    </div>
-                    <div class="tab" data-pane="paneRaw" id="tabRaw">
-                        <svg><use href="#i-code"/></svg><span id="tabRawText">読み込んだ CSV</span>
+            <!-- 右列 -->
+            <div class="col col-right">
+                <!-- 右上: 設計GL バー -->
+                <div class="quad quad-design-gl">
+                    <div class="design-gl-bar">
+                        <div class="design-gl-content">
+                            <span class="design-gl-label">設計GL =</span>
+                            <span class="design-gl-formula">BM[<input id="inputDesignGL" type="text" class="design-gl-input" placeholder="0" disabled>]</span>
+                            <span class="design-gl-unit">mm</span>
+                            <span class="design-gl-arrow">→</span>
+                            <span id="designGLResult" class="design-gl-result">CSV を読み込み、BM 水準点があれば有効に</span>
+                            <span class="design-gl-spacer"></span>
+                            <button id="btnApplyDesignGL" class="btn btn-primary" disabled>BM に設定</button>
+                        </div>
                     </div>
                 </div>
-                <div class="tab-panes">
-                    <div class="tab-pane active" id="panePlot">
-                        <canvas id="plotCanvas"></canvas>
-                    </div>
-                    <div class="tab-pane" id="paneOut">
-                        <div class="pane-toolbar">
-                            <span id="outInfo" class="pane-toolbar-info">プレビュー</span>
-                            <span class="spacer"></span>
-                            <button id="btnCopyOut" class="btn btn-ghost" disabled>
-                                <svg><use href="#i-copy"/></svg>クリップボードにコピー
-                            </button>
+
+                <!-- 右下: 配置図 (タブで出力CSVも切替可能) -->
+                <div class="quad quad-grow panel-preview">
+                    <div class="tabs">
+                        <div class="tab active" data-pane="panePlot" id="tabPlot">
+                            <svg><use href="#i-map"/></svg><span id="tabPlotText">配置図 (P 杭)</span>
                         </div>
-                        <textarea id="outText" class="raw-text" readonly placeholder="CSV を読み込むと、ここに出力プレビューが表示されます"></textarea>
+                        <div class="tab" data-pane="paneOut" id="tabOut">
+                            <svg><use href="#i-file-out"/></svg><span id="tabOutText">出力 CSV</span>
+                        </div>
                     </div>
-                    <div class="tab-pane" id="paneRaw">
-                        <textarea id="rawText" class="raw-text" readonly placeholder="ここに CSV の生データが表示されます"></textarea>
+                    <div class="tab-panes">
+                        <div class="tab-pane active" id="panePlot">
+                            <canvas id="plotCanvas"></canvas>
+                        </div>
+                        <div class="tab-pane" id="paneOut">
+                            <div class="pane-toolbar">
+                                <span id="outInfo" class="pane-toolbar-info">プレビュー</span>
+                                <span class="spacer"></span>
+                                <button id="btnCopyOut" class="btn btn-ghost" disabled>
+                                    <svg><use href="#i-copy"/></svg>クリップボードにコピー
+                                </button>
+                            </div>
+                            <textarea id="outText" class="raw-text" readonly placeholder="CSV を読み込むと、ここに出力プレビューが表示されます"></textarea>
+                        </div>
                     </div>
                 </div>
             </div>

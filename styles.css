@@ -359,7 +359,14 @@ select {
 }
 
 /* ============================================================
- *  Main layout
+ *  Main layout (2 列 × 2 行)
+ *
+ *  ┌──────────────┬──────────────┐
+ *  │ ドロップゾーン │ 設計GL バー   │
+ *  ├──────────────┼──────────────┤
+ *  │ 読み込んだCSV │ 配置図 / 出力 │
+ *  │ (グリッド)   │ (タブ)        │
+ *  └──────────────┴──────────────┘
  * ============================================================ */
 .main {
     flex: 1 1 auto;
@@ -371,15 +378,60 @@ select {
     background: var(--bg);
 }
 
+.col {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+}
+
+.quad {
+    background: var(--bg-elev);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex-shrink: 0;
+}
+
+.quad-grow {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* 左上: ドロップゾーン枠 (枠なし、薄いラッパだけ) */
+.quad-dropzone {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+.quad-dropzone .dropzone {
+    margin: 0;
+}
+
+/* 右上: 設計GL 枠 (バー自体がスタイル持つので枠は無し) */
+.quad-design-gl {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+.quad-design-gl .design-gl-bar {
+    border-radius: var(--radius);
+    border: 1px solid #D97706;
+    border-top: 1px solid #D97706;
+    border-bottom: 2px solid #D97706;
+    margin: 0;
+}
+
 .panel-grid, .panel-preview {
     background: var(--bg-elev);
     overflow: hidden;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    border: 1px solid var(--border);
 }
 
 .splitter {

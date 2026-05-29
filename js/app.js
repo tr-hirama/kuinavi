@@ -35,15 +35,12 @@
     const encodingSel = $('encoding');
     const gridHeader = $('gridHeader');
     const gridBody = $('gridBody');
-    const rawText = $('rawText');
     const outText = $('outText');
     const outInfo = $('outInfo');
     const btnCopyOut = $('btnCopyOut');
-    const tabRaw = $('tabRaw');
     const tabPlot = $('tabPlot');
     const tabOut = $('tabOut');
     const tabPlotText = $('tabPlotText');
-    const paneRaw = $('paneRaw');
     const panePlot = $('panePlot');
     const paneOut = $('paneOut');
     const statusbar = $('statusbar');
@@ -236,12 +233,11 @@
         _paletteIdx = 0;
         inputDesignGL.value = '';
         gridBody.innerHTML = '';
-        rawText.value = '';
         outText.value = '';
         outInfo.textContent = 'プレビュー';
         btnCopyOut.disabled = true;
         _suggestedName = '';
-        gridHeader.textContent = '読み込み待ち';
+        gridHeader.textContent = '読み込んだ CSV — 読み込み待ち';
         tabPlotText.textContent = '配置図 (P 杭)';
         plot.setData([]);
         updateExportButtonState();
@@ -249,9 +245,8 @@
         setStatus('クリアしました');
     }
 
-    function populateRawText() {
-        rawText.value = (_rawText || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    }
+    // 生データ表示タブは廃止 (グリッドが「読み込んだ CSV」を表示)
+    function populateRawText() { /* no-op */ }
 
     function populateOutputText() {
         const csv = G.buildCsv(_rows);
@@ -285,10 +280,9 @@
 
     function updateGridHeader() {
         const name = _inputFileName || '';
-        const lineCount = (_rawText || '').split('\n').length;
         gridHeader.textContent = name
-            ? `読み込んだCSV — ${name}  /  ${lineCount} 行  /  ${_rows.length} 点`
-            : '読み込み待ち';
+            ? `読み込んだ CSV — ${name}  /  ${_rows.length} 点`
+            : '読み込んだ CSV — 読み込み待ち';
     }
 
     function updatePlotTabTitle() {
@@ -999,8 +993,8 @@
         splitter.addEventListener('mousedown', (e) => {
             dragging = true;
             startX = e.clientX;
-            // 現在の左ペイン幅
-            leftStart = document.querySelector('.panel-grid').getBoundingClientRect().width;
+            // 現在の左カラム幅
+            leftStart = document.querySelector('.col-left').getBoundingClientRect().width;
             document.body.style.cursor = 'col-resize';
             document.body.style.userSelect = 'none';
             e.preventDefault();
