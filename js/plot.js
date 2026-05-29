@@ -242,15 +242,39 @@
                 ctx.fillText(r.name, p.x + 7, p.y - 12);
             }
 
-            // BM 点 — 濃紺の白抜きダイヤモンド + 名前ラベル
+            // BM 点 — 強調表示の塗りつぶしダイヤモンド
+            //   1) ドロップシャドウ + 白ハロー で背景から浮き上がらせる
+            //   2) 鮮やかな塗りつぶしダイヤモンド
+            //   3) 中心に白い小ドット
+            //   4) 大きめ太字ラベル + 白の縁取り
             const bmRows = rows.filter(r => G.isBMPoint(r.name));
             if (bmRows.length > 0) {
-                ctx.font = 'bold 11px "Yu Gothic UI", "Yu Gothic", sans-serif';
+                const sz = 10;
+                const dark = darken(BM_COLOR, 0.7);
+                ctx.font = 'bold 12px "Yu Gothic UI", "Yu Gothic", sans-serif';
+
                 for (const r of bmRows) {
                     const p = toPx(r.outX, r.outY);
-                    const sz = 7;
+
+                    // 1) ドロップシャドウ付きで白ハロー (外側のひと回り大きいダイヤ)
+                    ctx.save();
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+                    ctx.shadowBlur = 6;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 1;
                     ctx.fillStyle = '#ffffff';
-                    ctx.strokeStyle = BM_COLOR;
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y - sz - 3);
+                    ctx.lineTo(p.x + sz + 3, p.y);
+                    ctx.lineTo(p.x, p.y + sz + 3);
+                    ctx.lineTo(p.x - sz - 3, p.y);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+
+                    // 2) 塗りつぶしダイヤモンド (BM_COLOR) + 濃色アウトライン
+                    ctx.fillStyle = BM_COLOR;
+                    ctx.strokeStyle = dark;
                     ctx.lineWidth = 1.8;
                     ctx.beginPath();
                     ctx.moveTo(p.x, p.y - sz);
@@ -260,8 +284,19 @@
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
+
+                    // 3) 中央白ドット (精密な点位置を示唆)
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 4) ラベル: 白縁取り + 濃色テキストで可読性UP
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.strokeText(r.name, p.x + sz + 4, p.y - sz - 2);
                     ctx.fillStyle = BM_COLOR;
-                    ctx.fillText(r.name, p.x + 9, p.y - 11);
+                    ctx.fillText(r.name, p.x + sz + 4, p.y - sz - 2);
                 }
             }
 
@@ -407,9 +442,9 @@
             ctx.fillText('H  境界', x + 14, y);
             y += rowH;
 
-            // BM ダイヤモンド
-            ctx.fillStyle = '#ffffff';
-            ctx.strokeStyle = BM_COLOR;
+            // BM 塗りつぶしダイヤモンド + 中央白ドット (本体と統一)
+            ctx.fillStyle = BM_COLOR;
+            ctx.strokeStyle = darken(BM_COLOR, 0.7);
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.moveTo(x + 5, y + 2);
@@ -419,6 +454,10 @@
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(x + 5, y + 7, 1.5, 0, Math.PI * 2);
+            ctx.fill();
             ctx.fillStyle = '#000';
             ctx.fillText('BM 水準点', x + 14, y);
         }
@@ -498,7 +537,7 @@
             // 点の種類ごとの「ヒット半径」(画面ピクセル) と「優先度」
             //   P 杭 / BM 水準点: 編集対象 → 最優先 / K 基準点: 次点 / H 境界: 直接クリック時のみ
             function classify(name) {
-                if (G.isBMPoint(name)) return { rank: 3, radius: 11 };
+                if (G.isBMPoint(name)) return { rank: 3, radius: 14 };
                 if (G.startsWith(name, 'P')) return { rank: 3, radius: 12 };
                 if (G.startsWith(name, 'K')) return { rank: 2, radius: 12 };
                 if (G.startsWith(name, 'H')) return { rank: 1, radius: 6 };
