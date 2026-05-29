@@ -326,12 +326,13 @@
                 if (!legendByColor.has(c)) legendByColor.set(c, new Set());
                 legendByColor.get(c).add(keyZ(r.outZ));
             }
+            // 凡例は Z 値の大きい順に並べる (各エントリ内の Z リストも降順)
             const legendEntries = Array.from(legendByColor.entries())
                 .map(([color, zSet]) => ({
                     color,
-                    zs: Array.from(zSet).sort((a, b) => a - b),
+                    zs: Array.from(zSet).sort((a, b) => b - a),
                 }))
-                .sort((a, b) => a.zs[0] - b.zs[0]);
+                .sort((a, b) => b.zs[0] - a.zs[0]);
 
             // 選択行のハイライト
             if (this.selectedIndex >= 0 && this.selectedIndex < rows.length
