@@ -83,7 +83,7 @@
      * 行データから CSV テキストを構築 (出力用)
      *  - 対象: すべての点 (P / K / BM / その他)
      *  - P 点の名前: 先頭の "P" (大小区別なし) を除去 (例: P1 → 1)
-     *  - 順序: ① P 点 (番号昇順) → ② K 点 → ③ BM 点 → ④ その他 (S/H 等、入力順)
+     *  - 順序: ① P 点 (番号昇順) → ② BM 点 → ③ K 点 → ④ その他 (S/H 等、入力順)
      *  - 各行末尾に "," を付加
      */
     function buildCsv(rows) {
@@ -111,11 +111,11 @@
                 if (na !== nb) return na - nb;
                 return String(a.name).localeCompare(String(b.name));
             });
-        // ② K 点 (入力順) → ③ BM 点 (入力順) → ④ その他 (入力順)
-        const kRows = rows.filter(r => isK(r.name));
+        // ② BM 点 (入力順) → ③ K 点 (入力順) → ④ その他 (入力順)
         const bmRows = rows.filter(r => isBMPoint(r.name));
+        const kRows = rows.filter(r => isK(r.name));
         const otherRows = rows.filter(r => !isP(r.name) && !isK(r.name) && !isBMPoint(r.name));
-        const ordered = pRows.concat(kRows, bmRows, otherRows);
+        const ordered = pRows.concat(bmRows, kRows, otherRows);
 
         const lines = [];
         for (const p of ordered) {
