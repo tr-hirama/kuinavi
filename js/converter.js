@@ -127,7 +127,8 @@
     }
 
     /**
-     * ファイルをエンコーディング推定して読み込む (Shift-JIS 優先、ダメなら UTF-8)
+     * ファイルをエンコーディング推定して読み込む
+     * (BOM 検出 → UTF-8 厳密デコード → 失敗したら Shift-JIS)
      * @param {File} file
      * @returns {Promise<string>}
      */

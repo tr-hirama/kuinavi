@@ -47,17 +47,55 @@
             this._view = { zoom: 1.0, panX: 0, panY: 0 };   // ユーザのビューポート
             this._cw = 0; this._ch = 0;
             this._onSelect = null;
+            this._derived = this._computeDerived();
 
             this.canvas.addEventListener('mousedown', (e) => this._onMouseDown(e));
             this.canvas.addEventListener('wheel', (e) => this._onWheel(e), { passive: false });
             this.canvas.addEventListener('dblclick', (e) => this._onDblClick(e));
         }
 
-        setData(rows) {
+        setData(rows, opts) {
             this.rows = rows || [];
-            // 新データ読み込み時はビューもリセット
-            this._view = { zoom: 1.0, panX: 0, panY: 0 };
+            this._derived = this._computeDerived();
+            // 新データ読み込み時はビューをリセット。編集による更新 (preserveView) では
+            // ズーム / パンを維持する
+            if (!(opts && opts.preserveView)) {
+                this._view = { zoom: 1.0, panX: 0, panY: 0 };
+            }
             this.draw();
+        }
+
+        // rows から描画用の派生データを前計算する。
+        // draw() はパン / ズームのたびに毎フレーム呼ばれるため、
+        // フィルタ / ソート / 凡例集計はデータ更新時の 1 回に済ませる。
+        _computeDerived() {
+            const G = global.GlConverter;
+            const rows = this.rows;
+            // S 点と H 点は配置図に描画しないので、範囲計算からも除外する
+            const bboxRows = rows.filter(r => !G.isSPoint(r.name) && !G.startsWith(r.name, 'H'));
+            const kRows = rows.filter(r => G.startsWith(r.name, 'K'));
+            const kSorted = kRows
+                .map(r => ({ row: r, num: G.tryParsePointNumber(r.name) }))
+                .filter(x => x.num !== null)
+                .sort((a, b) => a.num - b.num);
+            const bmRows = rows.filter(r => G.isBMPoint(r.name));
+            const pRows = rows.filter(r => G.startsWith(r.name, 'P'));
+
+            // 凡例用: 色ごとに現在の Z 値をまとめ、Z 値の大きい順に並べる
+            const legendByColor = new Map();  // color → Set<Z>
+            for (const r of pRows) {
+                const c = r.color || palette[0];
+                if (!legendByColor.has(c)) legendByColor.set(c, new Set());
+                legendByColor.get(c).add(keyZ(r.outZ));
+            }
+            const legendEntries = Array.from(legendByColor.entries())
+                .map(([color, zSet]) => ({
+                    color,
+                    zs: Array.from(zSet).sort((a, b) => b - a),
+                }))
+                .sort((a, b) => b.zs[0] - a.zs[0]);
+
+            return { bboxRows, kRows, kSorted, bmRows, pRows, legendEntries };
         }
 
         resetView() {
@@ -79,9 +117,12 @@
             const dpr = window.devicePixelRatio || 1;
             const cssW = canvas.clientWidth;
             const cssH = canvas.clientHeight;
-            if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
-                canvas.width = Math.max(1, Math.floor(cssW * dpr));
-                canvas.height = Math.max(1, Math.floor(cssH * dpr));
+            // 比較も floor 後の値で行う (dpr が 1.25 等のとき毎フレーム再確保されるのを防ぐ)
+            const pxW = Math.max(1, Math.floor(cssW * dpr));
+            const pxH = Math.max(1, Math.floor(cssH * dpr));
+            if (canvas.width !== pxW || canvas.height !== pxH) {
+                canvas.width = pxW;
+                canvas.height = pxH;
             }
             const ctx = canvas.getContext('2d');
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -96,8 +137,8 @@
             }
 
             const G = global.GlConverter;
-            // S 点と H 点は配置図に描画しないので、範囲計算からも除外する
-            const bboxRows = rows.filter(r => !G.isSPoint(r.name) && !G.startsWith(r.name, 'H'));
+            const derived = this._derived;
+            const bboxRows = derived.bboxRows;
             if (bboxRows.length === 0) {
                 this._drawCenteredMessage(ctx, cssW, cssH, '描画対象の点がありません');
                 return;
@@ -180,14 +221,10 @@
             ctx.fillText(`X=${minX.toFixed(2)}`, pBL.x - 38, pBL.y - 14);
             ctx.fillText(`X=${maxX.toFixed(2)}`, pTL.x - 38, pTL.y - 14);
 
-            // H 点 (境界) は描画しない (要望により非表示)
+            // H 点は描画しない (要望により非表示)
 
-            // K 点 (境界) を番号順にソート
-            const kSorted = rows
-                .filter(r => G.startsWith(r.name, 'K'))
-                .map(r => ({ row: r, num: G.tryParsePointNumber(r.name) }))
-                .filter(x => x.num !== null)
-                .sort((a, b) => a.num - b.num);
+            // K 点 (境界、番号順にソート済み)
+            const kSorted = derived.kSorted;
 
             if (kSorted.length >= 2) {
                 ctx.strokeStyle = '#000';
@@ -212,7 +249,7 @@
             ctx.fillStyle = '#B22222';
             ctx.lineWidth = 1.5;
             ctx.font = 'bold 11px "Yu Gothic UI", "Yu Gothic", sans-serif';
-            for (const r of rows.filter(r => G.startsWith(r.name, 'K'))) {
+            for (const r of derived.kRows) {
                 const p = toPx(r.outX, r.outY);
                 ctx.beginPath();
                 ctx.moveTo(p.x, p.y - 7);
@@ -228,7 +265,7 @@
             //   2) 鮮やかな塗りつぶしダイヤモンド
             //   3) 中心に白い小ドット
             //   4) 大きめ太字ラベル + 白の縁取り
-            const bmRows = rows.filter(r => G.isBMPoint(r.name));
+            const bmRows = derived.bmRows;
             if (bmRows.length > 0) {
                 const sz = 10;
                 const dark = darken(BM_COLOR, 0.7);
@@ -283,7 +320,7 @@
 
             // P 点 — 各行に格納された color フィールドをそのまま使用
             //   (色の割り当ては app.js が管理: 編集モードによって色を保つか変えるか制御)
-            const pRows = rows.filter(r => G.startsWith(r.name, 'P'));
+            const pRows = derived.pRows;
             ctx.font = 'bold 11px "Yu Gothic UI", "Yu Gothic", sans-serif';
             for (const r of pRows) {
                 const p = toPx(r.outX, r.outY);
@@ -300,20 +337,8 @@
                 ctx.fillText(r.name, p.x + 6, p.y - 10);
             }
 
-            // 凡例用: 色ごとに現在の Z 値をまとめる
-            const legendByColor = new Map();  // color → Set<Z>
-            for (const r of pRows) {
-                const c = r.color || palette[0];
-                if (!legendByColor.has(c)) legendByColor.set(c, new Set());
-                legendByColor.get(c).add(keyZ(r.outZ));
-            }
-            // 凡例は Z 値の大きい順に並べる (各エントリ内の Z リストも降順)
-            const legendEntries = Array.from(legendByColor.entries())
-                .map(([color, zSet]) => ({
-                    color,
-                    zs: Array.from(zSet).sort((a, b) => b - a),
-                }))
-                .sort((a, b) => b.zs[0] - a.zs[0]);
+            // 凡例エントリ (setData 時に前計算済み)
+            const legendEntries = derived.legendEntries;
 
             // 選択行のハイライト (S / H は描画対象外なのでハイライトもしない)
             if (this.selectedIndex >= 0 && this.selectedIndex < rows.length
@@ -333,7 +358,7 @@
             ctx.restore();
 
             // 凡例 (クリップ外) — データに実在する種別のみ表示 (H は非表示)
-            const hasK = rows.some(r => G.startsWith(r.name, 'K'));
+            const hasK = derived.kRows.length > 0;
             const hasBM = bmRows.length > 0;
             this._drawLegend(ctx, cssW - marginR + 10, marginT, legendEntries,
                 { hasK, hasBM });

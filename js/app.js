@@ -188,7 +188,8 @@
     function onDrop(e) {
         const files = e.dataTransfer && e.dataTransfer.files;
         if (!files || files.length === 0) return;
-        loadFile(files[files.length - 1]);
+        // 複数ドロップ時は先頭を採用 (body 側のドロップ処理と同じ挙動に統一)
+        loadFile(files[0]);
     }
 
     async function loadFile(file) {
@@ -394,6 +395,9 @@
 
             let newZ;
             if (raw.length === 0) {
+                // 空欄 Z のセルを空のまま閉じた場合は「変更なし」
+                // (ここで 0 を確定すると Esc や単なるフォーカス移動でも編集扱いになる)
+                if (p.inZ == null) { refreshRow(index); return; }
                 newZ = 0;
             } else {
                 const v = parseFloat(raw);
@@ -422,20 +426,22 @@
         cell.addEventListener('keydown', onKey);
     }
 
+    // tbody の行順は常に index と一致する (populateGrid が順に追加し、
+    // refreshRow は同位置で置換するため)。children[index] で O(1) 参照できる。
     function refreshRow(index) {
-        const tr = gridBody.querySelector(`tr[data-index="${index}"]`);
+        const tr = gridBody.children[index];
         if (!tr) return;
         const newTr = buildRow(index, _rows[index]);
         if (index === _selectedIndex) newTr.classList.add('selected');
-        tr.parentNode.replaceChild(newTr, tr);
+        gridBody.replaceChild(newTr, tr);
     }
 
     function selectRow(index) {
         if (index < 0 || index >= _rows.length) return;
+        const prev = gridBody.children[_selectedIndex];
+        if (prev) prev.classList.remove('selected');
         _selectedIndex = index;
-        const trs = gridBody.querySelectorAll('tr');
-        trs.forEach(tr => tr.classList.remove('selected'));
-        const target = gridBody.querySelector(`tr[data-index="${index}"]`);
+        const target = gridBody.children[index];
         if (target) {
             target.classList.add('selected');
             // スクロール (グリッド枠内に表示)
@@ -587,14 +593,15 @@
                 outY: r.outY + dy,
                 outZ: r.outZ + dz,
             });
-            refreshRow(i);
         }
+        // 全行が変わるため、行単位の置換ではなく一括で再構築 (リフロー 1 回)
+        populateGrid();
         // 選択ハイライトを保持
         if (_selectedIndex >= 0) {
-            const tr = gridBody.querySelector(`tr[data-index="${_selectedIndex}"]`);
+            const tr = gridBody.children[_selectedIndex];
             if (tr) tr.classList.add('selected');
         }
-        plot.setData(_rows);
+        plot.setData(_rows, { preserveView: true });
         plot.setSelectedIndex(_selectedIndex);
         updatePlotTabTitle();
         populateOutputText();
@@ -737,10 +744,11 @@
         }
         // 選択状態を保持
         if (_selectedIndex >= 0) {
-            const tr = gridBody.querySelector(`tr[data-index="${_selectedIndex}"]`);
+            const tr = gridBody.children[_selectedIndex];
             if (tr) tr.classList.add('selected');
         }
-        plot.setData(_rows);
+        // Z 編集は XY 位置を変えないため、ズーム / パンを維持して再描画
+        plot.setData(_rows, { preserveView: true });
         plot.setSelectedIndex(_selectedIndex);
         updatePlotTabTitle();
         populateOutputText();
@@ -851,6 +859,7 @@
             suggestedName: _suggestedName,
             outputHandle: _outputHandle,
             inputFileName: _inputFileName,
+            designGL: inputDesignGL.value,
         };
     }
 
@@ -862,16 +871,17 @@
         _suggestedName = s.suggestedName;
         _outputHandle = s.outputHandle;
         _inputFileName = s.inputFileName;
+        inputDesignGL.value = s.designGL != null ? s.designGL : '';
 
         populateGrid();
         populateOutputText();
         updateGridHeader();
         updatePlotTabTitle();
-        plot.setData(_rows);
+        plot.setData(_rows, { preserveView: true });
         plot.setSelectedIndex(_selectedIndex);
         // グリッド選択ハイライトを復元
         if (_selectedIndex >= 0) {
-            const tr = gridBody.querySelector(`tr[data-index="${_selectedIndex}"]`);
+            const tr = gridBody.children[_selectedIndex];
             if (tr) {
                 tr.classList.add('selected');
                 try { tr.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_) {}
@@ -1121,7 +1131,7 @@
             </table>
             <p>P 杭は本数の多い Z グループから順に <strong>水色 → 薄緑 → 朱色</strong> で色分けされます。</p>
 
-            <h3>3. P 杭の Z 値を編集する</h3>
+            <h3>3. P 杭 / BM の Z 値を編集する</h3>
             <table>
                 <thead><tr><th>方法</th><th>用途</th></tr></thead>
                 <tbody>
@@ -1145,9 +1155,9 @@
                 <li>BM が無い場合は値を参照値として保持するのみ（Z 設定はスキップ）</li>
             </ul>
 
-            <h3>4. 座標変換 (選択 P 基準で全点シフト)</h3>
+            <h3>4. 座標変換 (選択点基準で全点シフト)</h3>
             <ol>
-                <li>P 杭を選択</li>
+                <li>P 杭または BM を選択</li>
                 <li>「座標変換」ボタン → 現在の X / Y / Z (m) が表示</li>
                 <li>目標値を入力 → OK で差分を全点 (P / K / H / S) に加算</li>
             </ol>
@@ -1159,7 +1169,7 @@
                 <li>エンコーディング: <code>Shift-JIS</code>（既存ツール互換）/ <code>UTF-8 (BOM)</code>（Excel 文字化けなし）</li>
                 <li>「出力 CSV」タブで保存前にプレビュー / クリップボードコピー可能</li>
             </ul>
-            <p>出力形式: <code>1,10.500,10.300,5.000,</code> のように <strong>P 名前は先頭の P を除去</strong>、行末は <code>,</code> で終わります。並びは P 番号昇順を先頭に、その後 K / H / S が入力順で続きます。</p>
+            <p>出力形式: <code>1,10.500,10.300,5.000,</code> のように <strong>P 名前は先頭の P を除去</strong>、行末は <code>,</code> で終わります。並びは P (番号昇順) → BM → K → その他 (H / S 等、入力順) です。</p>
 
             <h3>取り消し / やり直し (Undo / Redo)</h3>
             <table>
@@ -1169,7 +1179,7 @@
                     <tr><td>やり直し</td><td><span class="kbd">Ctrl+Y</span> / <span class="kbd">Ctrl+Shift+Z</span> または ↷ ボタン</td></tr>
                 </tbody>
             </table>
-            <p>Z 編集 / グループ変更 / 全本変更 / 座標変換 / クリアの直前の状態を最大 50 件まで保持します。新規ファイル読込で履歴はリセットされます。</p>
+            <p>Z 編集 / グループ変更 / 全本変更 / 設計GL の BM 反映 / 座標変換 / クリアの直前の状態を最大 50 件まで保持します。新規ファイル読込で履歴はリセットされます。</p>
 
             <h3>その他</h3>
             <ul>
